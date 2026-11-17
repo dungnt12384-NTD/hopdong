@@ -625,6 +625,15 @@ function editContract(id){
     if(o.link&&!okLink(o.link))return LINKMSG;
     if(id){Object.assign(c,o);log('Sửa hợp đồng',o.no,DIFF)}else{const n={id:uid(),positions:[],amendments:[],...o};S.contracts.push(n);log('Thêm hợp đồng',o.no);UI.page='contract';UI.id=n.id}},1);
 }
+/* Nhân bản (gia hạn): hợp đồng mới ở trạng thái Dự thảo, hiệu lực từ ngày sau khi HĐ cũ hết hạn, chép nhà thầu + chức danh (ngày bắt đầu chức danh để trống = theo ngày hiệu lực mới). Không chép phụ lục, file đính kèm, thanh toán, bảo lãnh, giá trị nhập tay. */
+function dupContract(id){const c=contract(id);
+  const d={...c,no:'',status:'draft',signDate:'',start:iso(new Date(parse(cEnd(c)).getTime()+DAY)),end:'',value:'',bondAmt:'',bondEnd:'',link:'',note:''};
+  openForm('Nhân bản hợp đồng '+c.no+' (gia hạn / hợp đồng mới)',contractFields(),d,o=>{
+    if(S.contracts.some(x=>norm(x.no)===norm(o.no)))return'Số hợp đồng đã tồn tại';
+    if(o.end&&o.end<o.start)return'Ngày hết hạn phải sau ngày hiệu lực';
+    if(o.link&&!okLink(o.link))return LINKMSG;
+    const n={id:uid(),...o,positions:c.positions.map(p=>({id:uid(),code:p.code,title:p.title,qty:p.qty,rate:p.rate,months:p.months,start:'',note:p.note||''})),amendments:[]};
+    S.contracts.push(n);log('Nhân bản hợp đồng',`${o.no} (từ ${c.no}), chép ${n.positions.length} chức danh`);UI.page='contract';UI.id=n.id},1)}
 function delContract(id){const c=contract(id);const np=S.payments.filter(p=>p.contractId===id).length;
   if(!confirm(`Xóa hợp đồng ${c.no}${np?` cùng ${np} lần thanh toán`:''}? Không thể hoàn tác (trừ khi có file sao lưu).`))return;
   S.contracts=S.contracts.filter(x=>x.id!==id);S.payments=S.payments.filter(p=>p.contractId!==id);log('Xóa hợp đồng',c.no);save();UI.page='contracts';UI.id=null;render()}
@@ -665,6 +674,7 @@ function editPay(pid,cid,preset){
   drawLines();
   dlgSave=()=>{
     if(!PAY.contractId)return'Chọn hợp đồng';if(!$('#pM').value)return'Chọn kỳ thanh toán';
+    if(S.payments.some(p=>p.id!==pid&&p.contractId===PAY.contractId&&p.period===$('#pM').value)&&!confirm(`Hợp đồng này ĐÃ có ghi nhận thanh toán cho kỳ ${vnm($('#pM').value)}.\nVẫn lưu thêm một bản nữa (có thể bị trùng)?`))return'Chưa lưu: nghi trùng kỳ thanh toán. Hãy sửa bản đã có thay vì thêm mới.';
     const o={contractId:PAY.contractId,period:$('#pM').value,reqNo:$('#pR').value.trim(),invNo:$('#pI').value.trim(),payDate:$('#pD').value,note:$('#pN').value.trim(),lines:PAY.lines,amount:PAY.lines.reduce((s,l)=>s+l.amount,0)};
     const c=contract(o.contractId);
     if(pid){const ch=[['Số tiền',fmt(ex.amount),fmt(o.amount)],['Ngày thanh toán',vn(ex.payDate)||'(trống)',vn(o.payDate)||'(trống)'],['Số đề nghị',ex.reqNo||'(trống)',o.reqNo||'(trống)'],['Số hóa đơn',ex.invNo||'(trống)',o.invNo||'(trống)'],['Kỳ',vnm(ex.period),vnm(o.period)],['Ghi chú',ex.note||'(trống)',o.note||'(trống)']]
@@ -723,7 +733,9 @@ function alerts(){
     if(!c.link&&!fl.some(f=>f.kind==='hd'))A.push({lvl:'info',cid:c.id,t:`${c.no}: chưa đính kèm file hợp đồng (bản scan).`});
     const noAmd=c.amendments.filter(a=>!a.link&&!fl.some(f=>f.aid===a.id));if(noAmd.length)A.push({lvl:'info',cid:c.id,t:`${c.no}: phụ lục ${noAmd.map(a=>a.no).join(', ')} chưa đính kèm file.`});
     const noDoc=S.payments.filter(p=>p.contractId===c.id&&!p.payDate&&!fl.some(f=>f.kind==='tt'&&filePeriod(f)===p.period));if(noDoc.length)A.push({lvl:'info',cid:c.id,t:`${c.no}: kỳ ${noDoc.map(p=>vnm(p.period)).join(', ')} đã đề nghị nhưng chưa đính kèm hồ sơ thanh toán.`});
-    const pend=S.payments.filter(p=>p.contractId===c.id&&!p.payDate);if(pend.length)A.push({lvl:'info',cid:c.id,t:`${c.no}: có ${pend.length} kỳ đã đề nghị nhưng chưa thanh toán (${pend.map(p=>vnm(p.period)).join(', ')}).`});
+    const pend=S.payments.filter(p=>p.contractId===c.id&&!p.payDate),pOld=pend.filter(p=>{const[py,pm]=p.period.split('-').map(Number);return(refD()-new Date(py,pm,0))/DAY>45}),pNew=pend.filter(p=>!pOld.includes(p));
+    if(pOld.length)A.push({lvl:'warn',cid:c.id,t:`${c.no}: ${pOld.length} kỳ chờ thanh toán quá 45 ngày kể từ cuối kỳ (${pOld.map(p=>vnm(p.period)).join(', ')}) — đối chiếu và đôn đốc thanh toán.`});
+    if(pNew.length)A.push({lvl:'info',cid:c.id,t:`${c.no}: có ${pNew.length} kỳ đã đề nghị nhưng chưa thanh toán (${pNew.map(p=>vnm(p.period)).join(', ')}).`});
   }
   const o={bad:0,warn:1,info:2};return A.sort((a,b)=>o[a.lvl]-o[b.lvl]);
 }
@@ -745,6 +757,21 @@ const LINKMSG='Đường dẫn file scan phải bắt đầu bằng http://, htt
 const linkHtml=l=>!l?'<span class="muted">—</span>':okLink(l)?`<a href="${esc(/^[a-z]:\\/i.test(l)?'file:///'+l.replace(/\\/g,'/'):l)}" target="_blank" rel="noopener">📎 Mở file</a>`:`<span class="muted" title="Đường dẫn không hợp lệ, hãy sửa lại">⚠ ${esc(l)}</span>`;
 const prog=r=>`<span class="progress"><i style="width:${Math.min(100,r*100)}%;${r>1?'background:#dc2626':r>=.9?'background:#d97706':''}"></i></span>${Math.round(r*100)}%`;
 
+const fmtM=n=>n>=1e9?(+(n/1e9).toFixed(2))+' tỷ':n>=1e6?Math.round(n/1e6)+' tr':fmt(n);
+/* Biểu đồ cột 12 tháng gần nhất: đã thanh toán (xanh) + chờ thanh toán (cam), chỉ tính VND */
+function chartPay(ref){
+  const ms=[],[y,m]=ref.split('-').map(Number);for(let i=11;i>=0;i--){const d=new Date(y,m-1-i,1);ms.push(`${d.getFullYear()}-${pad(d.getMonth()+1)}`)}
+  const D=ms.map(ym=>{let paid=0,pend=0;S.payments.forEach(p=>{if(p.period!==ym||cur(contract(p.contractId))==='USD')return;if(p.payDate)paid+=p.amount;else pend+=p.amount});return{ym,paid,pend}});
+  const mx=Math.max(1,...D.map(x=>x.paid+x.pend)),W=720,H=200,pl=8,bw=40,gap=(W-pl*2-bw*12)/11,top=22,bot=H-30;
+  const bars=D.map((x,i)=>{const px=pl+i*(bw+gap),hp=x.paid/mx*(bot-top),hq=x.pend/mx*(bot-top);
+    return`<rect x="${px}" y="${bot-hp}" width="${bw}" height="${hp}" fill="#15803d"/><rect x="${px}" y="${bot-hp-hq}" width="${bw}" height="${hq}" fill="#d97706"/>${x.paid+x.pend?`<text x="${px+bw/2}" y="${bot-hp-hq-4}" text-anchor="middle" font-size="10" fill="#475569">${fmtM(x.paid+x.pend)}</text>`:''}<text x="${px+bw/2}" y="${H-12}" text-anchor="middle" font-size="11" fill="#475569">${x.ym.slice(5)}/${x.ym.slice(2,4)}</text>`}).join('');
+  return`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:240px" role="img" aria-label="Biểu đồ thanh toán 12 tháng gần nhất"><line x1="0" y1="${bot}" x2="${W}" y2="${bot}" stroke="#cbd5e1"/>${bars}</svg>`}
+/* Dự báo 6 tháng: số tiền phát sinh theo hợp đồng (SL × đơn giá × ngày hiệu lực), bỏ qua kỳ đã ghi nhận thanh toán */
+function forecast(){const t=refD(),out=[];
+  for(let i=0;i<6;i++){const d=new Date(t.getFullYear(),t.getMonth()+i,1),ym=`${d.getFullYear()}-${pad(d.getMonth()+1)}`;let n=0;const s={VND:0,USD:0};
+    S.contracts.forEach(c=>{if(c.status==='draft'||c.status==='liq')return;if(S.payments.some(p=>p.contractId===c.id&&p.period===ym))return;
+      const a=genLines(c,ym).reduce((q,l)=>q+l.amount,0);if(a>0){n++;s[cur(c)]+=a}});out.push({ym,n,s})}
+  return out}
 function vDash(){
   const act=S.contracts.filter(isActive),A=alerts(),H=S.settings.horizon,thisYm=ymOf(refStr());
   const soon=S.contracts.filter(c=>isActive(c)&&daysLeft(cEnd(c))<=H);
@@ -764,6 +791,11 @@ function vDash(){
   <div class="card"><h2>⚠ Việc cần xử lý (${A.length})</h2>
     ${A.length?`<ul class="alerts">${A.map(a=>`<li class="${a.lvl}" onclick="go('contract','${a.cid}')"><span class="badge b-${a.lvl==='bad'?'bad':a.lvl==='warn'?'warn':'info'}">${a.lvl==='bad'?'Khẩn':a.lvl==='warn'?'Cần chú ý':'Lưu ý'}</span>${esc(a.t)}</li>`).join('')}</ul>`:'<p class="muted">Không có cảnh báo. 👍</p>'}
   </div>
+  <div class="card"><h2>📊 Thanh toán 12 tháng gần nhất</h2>${chartPay(thisYm)}
+    <p class="muted" style="margin:4px 0 0"><span style="color:#15803d">■</span> Đã thanh toán &nbsp;<span style="color:#d97706">■</span> Chờ thanh toán · theo kỳ thanh toán, đơn vị VND${S.contracts.some(c=>c.currency==='USD')?' (hợp đồng USD không tính trong biểu đồ)':''}</p></div>
+  <div class="card"><h2>💰 Dự báo chi 6 tháng tới</h2>${(()=>{const F=forecast(),T={VND:0,USD:0};F.forEach(f=>{T.VND+=f.s.VND;T.USD+=f.s.USD});
+    return`<div class="tbl"><table><thead><tr><th>Kỳ</th><th class="n">Số HĐ phát sinh</th><th class="n">Dự kiến phải trả</th></tr></thead><tbody>${F.map(f=>`<tr><td><b>${vnm(f.ym)}</b></td><td class="n">${f.n}</td><td class="n">${f.n?fmtCur(f.s):'—'}</td></tr>`).join('')}</tbody><tfoot><tr><td>Tổng 6 tháng</td><td></td><td class="n">${fmtCur(T)}</td></tr></tfoot></table></div>`})()}
+    <p class="muted" style="margin:6px 0 0">Ước tính theo số lượng và đơn giá trong hợp đồng, tính theo số ngày còn hiệu lực của từng chức danh. Bỏ qua kỳ đã có ghi nhận thanh toán, không tính hợp đồng dự thảo/đã thanh lý. Số thực tế phụ thuộc ngày công nhà thầu đề nghị.</p></div>
   <div class="card"><h2>📅 Chức danh hết hạn trong ${H} ngày tới</h2><div class="tbl"><table>
     <thead><tr><th>Hết hạn</th><th class="n">Còn lại</th><th>Số HĐ</th><th>Nhà thầu</th><th>Chức danh</th><th class="n">SL</th><th>Trạng thái</th></tr></thead>
     <tbody>${up.map(x=>`<tr class="click" onclick="go('contract','${x.c.id}')"><td><b>${vn(posEnd(x.c,x.p))}</b></td><td class="n">${x.l}</td><td>${esc(x.c.no)}</td><td>${esc(vendor(x.c.vendorId).name)}</td><td>${esc(x.p.title)}</td><td class="n">${x.p.qty}</td><td>${badge(pStatus(x.c,x.p))}</td></tr>`).join('')||'<tr><td colspan="7" class="muted">Không có</td></tr>'}</tbody></table></div></div>`;
@@ -797,7 +829,7 @@ function vContract(){
   const kv=(k,v)=>`<div class="kv"><span>${k}</span><b>${v}</b></div>`;
   $('#view').innerHTML=`<button class="back" onclick="go('contracts')">← Danh sách hợp đồng</button>
   <div class="card"><div class="bar"><h2>${esc(c.no)} ${badge(st)}</h2><div class="right">
-    <button onclick="editContract('${c.id}')">Sửa</button><button class="grn" onclick="repContract('${c.id}')">⬇ Xuất Excel HĐ này</button><button class="del" onclick="delContract('${c.id}')">Xóa</button></div></div>
+    <button onclick="editContract('${c.id}')">Sửa</button><button onclick="dupContract('${c.id}')" title="Tạo hợp đồng mới từ hợp đồng này (gia hạn)">⎘ Nhân bản</button><button class="grn" onclick="repContract('${c.id}')">⬇ Xuất Excel HĐ này</button><button class="del" onclick="delContract('${c.id}')">Xóa</button></div></div>
     <div class="grid2">
       ${kv('Nhà thầu',`<a href="#" onclick="go('vendor','${v.id}');return false">${esc(v.name)}</a>`)}${kv('Loại hợp đồng',esc(c.type))}
       ${kv('Ngày ký',vn(c.signDate)||'—')}${kv('Hiệu lực → Hết hạn',`${vn(c.start)} → ${vn(end)}${c.end?'':' <span class="muted">(tự tính)</span>'}`)}
