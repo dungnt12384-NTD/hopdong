@@ -1,0 +1,10 @@
+# Không bao giờ đưa lên repo công khai: khóa, bí mật, dữ liệu hợp đồng
+client_secret*
+*.key
+*.pem
+.env
+du-lieu-hop-dong*.json
+SaoLuu/
+*.bak
+Thumbs.db
+desktop.ini

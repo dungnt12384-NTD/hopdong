@@ -182,7 +182,7 @@ const idb=(mode,fn)=>new Promise((res,rej)=>{const rq=indexedDB.open('hd-manager
 /* ===== Lưu trữ: Google Drive + mã hóa AES-GCM =====
    Dữ liệu nằm trong thư mục "QuanLyHopDong" của Google Drive người dùng. Quyền drive.file: ứng dụng chỉ thấy file do chính nó tạo.
    Mọi file dữ liệu/sao lưu được mã hóa bằng mật khẩu ngay trên máy trước khi tải lên: Google, nơi đặt web đều không đọc được nội dung. */
-const GCFG={clientId:'680403336516-stpdhc7ucmfscus5rph74790tccgv3u0.apps.googleusercontent.com',scope:'https://www.googleapis.com/auth/drive.file',folder:'QuanLyHopDong'};
+const GCFG={clientId:'680403336516-stpdhc7ucmfscus5rph74790tccgv3u0.apps.googleusercontent.com',scope:'https://www.googleapis.com/auth/drive.file',folder:(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'QuanLyHopDong-Test':'QuanLyHopDong'};   // chạy thử trên máy (localhost) dùng thư mục riêng, không đụng dữ liệu thật
 const GD={tok:'',exp:0,client:null,busy:null,state:'init',mode:'',err:'',user:'',lost:false,hdr:null};   // state: init | nogis | signin | unlock | ok
 const CR={pass:'',salt:null,keys:new Map(),remember:false,on:false};
 let ROOT=null,FORCEW=false;
