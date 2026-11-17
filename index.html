@@ -235,8 +235,8 @@ class GFile{
   async getFile(){if(!this.id)throw notFound('Không tìm thấy file');const c=TXTC[this.id];let text;
     if(c&&this.md5&&c.md5===this.md5)text=c.text;else{text=await(await gfetch('/drive/v3/files/'+this.id+'?alt=media')).text();TXTC[this.id]={md5:this.md5,text}}
     return{name:this.name,size:text.length,text:async()=>text}}
-  async createWritable(){const self=this,parts=[];return{write:async d=>{parts.push(d)},close:async()=>{await self._save(parts.length===1&&typeof parts[0]==='string'?parts[0]:new Blob(parts))}}}
-  async _save(body){const type='application/json';let r;
+  async createWritable(){const self=this,parts=[];return{write:async d=>{if(d instanceof Blob)self.mime=d.type||'application/octet-stream';parts.push(d)},close:async()=>{await self._save(parts.length===1&&typeof parts[0]==='string'?parts[0]:new Blob(parts))}}}
+  async _save(body){const type=this.mime||'application/json';let r;
     if(this.id)r=await gfetch('/upload/drive/v3/files/'+this.id+'?uploadType=media&fields=id,md5Checksum',{method:'PATCH',headers:{'Content-Type':type},body});
     else{const b='hdb'+Math.random().toString(36).slice(2),meta=JSON.stringify({name:this.name,parents:[this.parent.id]});
       const pre=`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${b}\r\nContent-Type: ${type}\r\n\r\n`;
@@ -403,8 +403,8 @@ setInterval(bkTick,30000);
 /* ===== Nơi lưu trữ tài liệu (mỗi loại một thư mục, tự chọn trong Cài đặt) =====
    Thư mục được nhớ trên máy này (IndexedDB). Chưa chọn → file được tải về thư mục Downloads như thường lệ. */
 const FOLDERS=[
-  ['hd','Hợp đồng & phụ lục','File scan/PDF đính kèm trong trang chi tiết hợp đồng. Tự tạo thư mục con theo số hợp đồng.'],
-  ['tt','Hồ sơ thanh toán','Hóa đơn, bảng chấm công, biên bản nghiệm thu… Tự tạo thư mục con theo số hợp đồng và tháng.'],
+  ['hd','Hợp đồng & phụ lục (file cũ)','Chỉ để mở các file đã đính kèm trước đây vào thư mục máy. File mới được lưu trên Google Drive.'],
+  ['tt','Hồ sơ thanh toán (file cũ)','Chỉ để mở các hồ sơ đã đính kèm trước đây vào thư mục máy. File mới được lưu trên Google Drive.'],
   ['bc','Báo cáo (Excel)','Báo cáo 1–7: bảng kê thanh toán, sắp hết hạn, tình hình thực hiện, sổ theo dõi, nhật ký, danh mục.'],
   ['mau','Biểu mẫu & phiếu gửi đi','Phiếu thông tin hợp đồng, bảng kê thanh toán gửi nhà thầu, phiếu sai lệch.'],
   ['nhap','File nhận về (để nhập)','Hộp thoại chọn file của mục "Nhập từ file" sẽ mở sẵn ở thư mục này.']
@@ -426,20 +426,46 @@ async function saveOut(buf,name,type,cat){
   if(h){try{const n=await uniqueName(h,name),w=await (await h.getFileHandle(n,{create:true})).createWritable();await w.write(buf);await w.close();toast(`✓ Đã lưu: ${h.name}/${n}`);return n}
     catch(e){alert('Không ghi được vào thư mục đã chọn ('+e.message+'). File sẽ được tải về thư mục Downloads.')}}
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([buf],{type}));a.download=name;a.click();return name}
-const KINDLBL={hd:'Hợp đồng & phụ lục',tt:'Hồ sơ thanh toán'};
-async function attachFiles(cid,kind){
-  const c=contract(cid),h=await fDir(kind);
-  if(!h)return alert(`Chưa chọn (hoặc chưa cấp quyền) thư mục "${KINDLBL[kind]}".\nVào Cài đặt & Sao lưu → Nơi lưu trữ tài liệu để chọn.`);
-  let fl;try{fl=await showOpenFilePicker({multiple:true})}catch(e){return}
-  let subs=[c.no];if(kind==='tt'){const p=prompt('Hồ sơ thanh toán của tháng nào? (YYYY-MM)',ymOf(refStr()));if(!p)return;if(!/^\d{4}-\d{2}$/.test(p.trim()))return alert('Tháng không hợp lệ');subs.push(p.trim())}
-  try{const d=await subDir(h,subs,true);c.files??=[];
-    for(const fh of fl){const f=await fh.getFile(),n=await uniqueName(d,f.name),w=await (await d.getFileHandle(n,{create:true})).createWritable();await w.write(f);await w.close();
-      c.files.push({id:uid(),kind,name:n,sub:subs.map(safeName).join('/'),at:new Date().toISOString()});log('Đính kèm file',`${c.no}: ${n}`,`${KINDLBL[kind]} → ${h.name}/${subs.map(safeName).join('/')}`)}
-    save();render();toast(`✓ Đã đính kèm ${fl.length} file`)}catch(e){alert('Không đính kèm được: '+e.message)}
+/* Tài liệu đính kèm: lưu trên Google Drive (QuanLyHopDong/TaiLieu/<số HĐ>/...), dùng được trên mọi thiết bị.
+   File đính kèm cũ (f.where không có) vẫn nằm trong thư mục máy và mở bằng cách cũ. */
+const KINDLBL={hd:'Hợp đồng',tt:'Hồ sơ thanh toán',pl:'Phụ lục'};
+const MAXATT=25*1024*1024;
+const filePeriod=f=>f.period||(f.sub||'').split('/')[1]||'';
+const pickFiles=()=>new Promise(res=>{const i=document.createElement('input');i.type='file';i.multiple=true;i.onchange=()=>res([...i.files]);i.oncancel=()=>res([]);i.click()});
+async function attachFiles(cid,kind,aid){
+  const c=contract(cid);
+  if(!DIR)return alert('Cần đăng nhập Google và mở khóa dữ liệu trước khi đính kèm file.');
+  const fl=await pickFiles();if(!fl.length)return;   // chọn file ngay trong thao tác bấm nút để trình duyệt không chặn
+  const big=fl.find(f=>f.size>MAXATT);if(big)return alert(`File "${big.name}" lớn hơn 25 MB. Hãy nén hoặc tách nhỏ rồi đính kèm lại.`);
+  let ym='';if(kind==='tt'){const p=prompt('Hồ sơ thanh toán của tháng nào? (YYYY-MM)',ymOf(refStr()));if(!p)return;if(!/^\d{4}-\d{2}$/.test(p.trim()))return alert('Tháng không hợp lệ');ym=p.trim()}
+  const subs=kind==='tt'?[c.no,ym]:kind==='pl'?[c.no,'PhuLuc']:[c.no];let done=0;
+  try{const d=await subDir(ROOT,['TaiLieu',...subs],true);c.files??=[];
+    for(const f of fl){toast(`⟳ Đang tải lên Google Drive ${done+1}/${fl.length}: ${f.name}`,'warn');
+      const n=await uniqueName(d,f.name),fh=await d.getFileHandle(n,{create:true}),w=await fh.createWritable();await w.write(f);await w.close();
+      const sub=subs.map(safeName).join('/');
+      c.files.push({id:uid(),kind,name:n,sub,where:'drive',did:fh.id,at:new Date().toISOString(),...(kind==='tt'?{period:ym}:{}),...(aid?{aid}:{})});done++;
+      log('Đính kèm file',`${c.no}: ${n}`,`${KINDLBL[kind]} → Google Drive/TaiLieu/${sub}`)}
+    toast(`✓ Đã đính kèm ${done} file lên Google Drive`)}
+  catch(e){alert(`Không đính kèm được hết${done?` (đã xong ${done}/${fl.length} file)`:''}: `+e.message)}
+  finally{if(done){save();render()}}
 }
-async function openAttach(cid,fid){const c=contract(cid),f=c.files.find(x=>x.id===fid);const h=await fDir(f.kind);if(!h)return alert('Cần chọn lại / cấp lại quyền thư mục "'+KINDLBL[f.kind]+'" trong Cài đặt.');
+async function openAttach(cid,fid,dl){const c=contract(cid),f=c.files.find(x=>x.id===fid);
+  if(f.where==='drive'){
+    if(!DIR)return alert('Cần đăng nhập Google và mở khóa dữ liệu trước.');
+    const w=dl?null:window.open('','_blank');   // mở cửa sổ ngay khi bấm để không bị chặn pop-up
+    try{const b=await(await gfetch('/drive/v3/files/'+f.did+'?alt=media')).blob(),u=URL.createObjectURL(b);
+      if(w)w.location.href=u;else{const a=document.createElement('a');a.href=u;a.download=f.name;a.click()}
+      setTimeout(()=>URL.revokeObjectURL(u),120000)}
+    catch(e){if(w)w.close();alert(e.status===404?`Không tìm thấy file "${f.name}" trên Google Drive (có thể đã bị xóa hoặc nằm trong thùng rác).`:'Không mở được file: '+e.message)}
+    return}
+  const h=await fDir(f.kind);if(!h)return alert('File này nằm trong thư mục trên máy cũ. Cần chọn lại / cấp lại quyền thư mục "'+KINDLBL[f.kind]+'" trong Cài đặt (chỉ trên máy tính đã đính kèm).');
   try{const d=await subDir(h,f.sub.split('/'),false),file=await (await d.getFileHandle(f.name)).getFile();window.open(URL.createObjectURL(file),'_blank')}catch(e){alert('Không tìm thấy file "'+f.name+'" trong thư mục đã chọn. Có thể file đã bị đổi tên/di chuyển, hoặc bạn đã chọn thư mục khác.')}}
-function delAttach(cid,fid){const c=contract(cid),f=c.files.find(x=>x.id===fid);if(confirm(`Gỡ file "${f.name}" khỏi hợp đồng?\n(File thật vẫn còn nguyên trong thư mục, chỉ bỏ liên kết trong phần mềm.)`)){c.files=c.files.filter(x=>x.id!==fid);log('Gỡ file đính kèm',`${c.no}: ${f.name}`);save();render()}}
+async function delAttach(cid,fid){const c=contract(cid),f=c.files.find(x=>x.id===fid),dr=f.where==='drive';
+  if(!confirm(dr?`Gỡ file "${f.name}" khỏi hợp đồng?\n(File trên Google Drive sẽ được chuyển vào Thùng rác của Drive, vẫn khôi phục được trong 30 ngày.)`:`Gỡ file "${f.name}" khỏi hợp đồng?\n(File thật vẫn còn nguyên trong thư mục, chỉ bỏ liên kết trong phần mềm.)`))return;
+  if(dr){if(!DIR)return alert('Cần đăng nhập Google và mở khóa dữ liệu trước.');
+    try{await gfetch('/drive/v3/files/'+f.did,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:true})})}
+    catch(e){if(e.status!==404&&!confirm('Không chuyển được file trên Drive vào thùng rác ('+e.message+').\nVẫn gỡ liên kết trong phần mềm?'))return}}
+  c.files=c.files.filter(x=>x.id!==fid);log('Gỡ file đính kèm',`${c.no}: ${f.name}`);save();render()}
 async function pickImport(){const h=await fDir('nhap');
   if(h&&window.showOpenFilePicker){try{const[fh]=await showOpenFilePicker({startIn:h,types:[{description:'Hồ sơ nhập (.xlsx, .json)',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx'],'application/json':['.json']}}]});handleFile(await fh.getFile())}catch(e){}return}
   $('#impFile').click()}
@@ -677,6 +703,10 @@ function alerts(){
     else if(r>=.8)A.push({lvl:'info',cid:c.id,t:`${c.no}: đã thanh toán/đề nghị ${Math.round(r*100)}% giá trị HĐ.`});
     const activeLast=c.positions.some(p=>ymOf(posStart(c,p))<=lastYm&&ymOf(posEnd(c,p))>=lastYm);
     if(activeLast&&!S.payments.some(p=>p.contractId===c.id&&p.period===lastYm))A.push({lvl:'info',cid:c.id,t:`${c.no}: chưa ghi nhận thanh toán kỳ ${vnm(lastYm)}.`});
+    const fl=c.files||[];
+    if(!c.link&&!fl.some(f=>f.kind==='hd'))A.push({lvl:'info',cid:c.id,t:`${c.no}: chưa đính kèm file hợp đồng (bản scan).`});
+    const noAmd=c.amendments.filter(a=>!a.link&&!fl.some(f=>f.aid===a.id));if(noAmd.length)A.push({lvl:'info',cid:c.id,t:`${c.no}: phụ lục ${noAmd.map(a=>a.no).join(', ')} chưa đính kèm file.`});
+    const noDoc=S.payments.filter(p=>p.contractId===c.id&&!p.payDate&&!fl.some(f=>f.kind==='tt'&&filePeriod(f)===p.period));if(noDoc.length)A.push({lvl:'info',cid:c.id,t:`${c.no}: kỳ ${noDoc.map(p=>vnm(p.period)).join(', ')} đã đề nghị nhưng chưa đính kèm hồ sơ thanh toán.`});
     const pend=S.payments.filter(p=>p.contractId===c.id&&!p.payDate);if(pend.length)A.push({lvl:'info',cid:c.id,t:`${c.no}: có ${pend.length} kỳ đã đề nghị nhưng chưa thanh toán (${pend.map(p=>vnm(p.period)).join(', ')}).`});
   }
   const o={bad:0,warn:1,info:2};return A.sort((a,b)=>o[a.lvl]-o[b.lvl]);
@@ -760,16 +790,16 @@ function vContract(){
       ${kv('File hợp đồng',linkHtml(c.link))}${kv('Ghi chú',esc(c.note)||'—')}
       ${c.u?kv('Sửa lần cuối',new Date(c.u).toLocaleString('vi-VN')):''}
     </div></div>
-  <div class="card"><div class="bar"><h2>📎 Tài liệu đính kèm (${(c.files||[]).length})</h2><span class="muted">File được chép vào thư mục lưu trữ đã chọn trong Cài đặt</span><div class="right"><button onclick="attachFiles('${c.id}','hd')">+ File hợp đồng / phụ lục</button><button onclick="attachFiles('${c.id}','tt')">+ Hồ sơ thanh toán</button></div></div>
+  <div class="card"><div class="bar"><h2>📎 Tài liệu đính kèm (${(c.files||[]).length})</h2><span class="muted">File được lưu trên Google Drive (thư mục TaiLieu/${esc(safeName(c.no))}), mở được trên mọi thiết bị</span><div class="right"><button onclick="attachFiles('${c.id}','hd')">+ File hợp đồng</button><button onclick="attachFiles('${c.id}','tt')">+ Hồ sơ thanh toán</button></div></div>
     <div class="tbl"><table><thead><tr><th>Loại</th><th>File</th><th>Nằm trong</th><th>Ngày đính kèm</th><th></th></tr></thead><tbody>
-    ${(c.files||[]).map(f=>`<tr><td>${KINDLBL[f.kind]||f.kind}</td><td><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></td><td class="muted">${esc(f.sub)}</td><td>${new Date(f.at).toLocaleDateString('vi-VN')}</td><td><button class="sm del" onclick="delAttach('${c.id}','${f.id}')">Gỡ</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">Chưa có file đính kèm</td></tr>'}</tbody></table></div></div>
+    ${(c.files||[]).map(f=>`<tr><td>${KINDLBL[f.kind]||f.kind}</td><td><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></td><td class="muted">${f.where==='drive'?'☁ Drive: ':'💻 Máy (cũ): '}${esc(f.sub)}${f.aid?` · ${esc((c.amendments.find(a=>a.id===f.aid)||{}).no||'')}`:''}</td><td>${new Date(f.at).toLocaleDateString('vi-VN')}</td><td>${f.where==='drive'?`<button class="sm" title="Tải về" onclick="openAttach('${c.id}','${f.id}',true)">⬇</button> `:''}<button class="sm del" onclick="delAttach('${c.id}','${f.id}')">Gỡ</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">Chưa có file đính kèm</td></tr>'}</tbody></table></div></div>
   <div class="card"><div class="bar"><h2>Chức danh (${c.positions.length})</h2><span class="muted">Ngày hết hạn = Ngày bắt đầu + Thời hạn − 1 ngày</span><div class="right"><button class="pri" onclick="editPos('${c.id}')">+ Thêm chức danh</button></div></div>
     <div class="tbl"><table><thead><tr><th>Mã</th><th>Chức danh</th><th class="n">SL</th><th class="n">Đơn giá/tháng</th><th class="n">Thời hạn</th><th>Bắt đầu</th><th>Hết hạn</th><th class="n">Còn lại</th><th>Trạng thái</th><th class="n">Giá trị</th><th>Ghi chú</th><th></th></tr></thead><tbody>
     ${c.positions.slice().sort((a,b)=>posEnd(c,a).localeCompare(posEnd(c,b))).map(p=>{const ps=pStatus(c,p);return`<tr><td>${esc(p.code)}</td><td><b>${esc(p.title)}</b></td><td class="n">${p.qty}</td><td class="n">${fmt(p.rate)}</td><td class="n">${p.months} th</td><td>${vn(posStart(c,p))}</td><td><b>${vn(posEnd(c,p))}</b></td><td class="n">${ps==='bad'?'':daysLeft(posEnd(c,p))}</td><td>${badge(ps)}</td><td class="n">${fmt(p.qty*p.rate*p.months)}</td><td class="muted">${esc(p.note)}</td>
       <td><button class="sm" onclick="editPos('${c.id}','${p.id}')">Sửa</button> <button class="sm del" onclick="delPos('${c.id}','${p.id}')">Xóa</button></td></tr>`}).join('')||'<tr><td colspan="12" class="muted">Chưa có chức danh</td></tr>'}</tbody></table></div></div>
   <div class="card"><div class="bar"><h2>Phụ lục / điều chỉnh (${c.amendments.length})</h2><span class="muted">Khi có phụ lục: ghi lại ở đây, rồi cập nhật chức danh tương ứng.</span><div class="right"><button onclick="editAmd('${c.id}')">+ Thêm phụ lục</button></div></div>
     <div class="tbl"><table><thead><tr><th>Số PL</th><th>Ngày</th><th>Nội dung</th><th>File</th><th></th></tr></thead><tbody>
-    ${c.amendments.map(a=>`<tr><td><b>${esc(a.no)}</b></td><td>${vn(a.date)}</td><td style="white-space:normal">${esc(a.content)}</td><td>${linkHtml(a.link)}</td><td><button class="sm" onclick="editAmd('${c.id}','${a.id}')">Sửa</button> <button class="sm del" onclick="delAmd('${c.id}','${a.id}')">Xóa</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">Chưa có phụ lục</td></tr>'}</tbody></table></div></div>
+    ${c.amendments.map(a=>`<tr><td><b>${esc(a.no)}</b></td><td>${vn(a.date)}</td><td style="white-space:normal">${esc(a.content)}</td><td>${a.link?linkHtml(a.link):''}${(c.files||[]).filter(f=>f.aid===a.id).map(f=>`<div><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></div>`).join('')}<button class="sm" onclick="attachFiles('${c.id}','pl','${a.id}')">+ File</button></td><td><button class="sm" onclick="editAmd('${c.id}','${a.id}')">Sửa</button> <button class="sm del" onclick="delAmd('${c.id}','${a.id}')">Xóa</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">Chưa có phụ lục</td></tr>'}</tbody></table></div></div>
   <div class="card"><div class="bar"><h2>Lịch sử thanh toán (${pays.length})</h2><div class="right"><button class="pri" onclick="editPay(null,'${c.id}')">+ Ghi nhận thanh toán</button></div></div>
     ${payTable(pays,false)}</div>`;
 }
@@ -861,8 +891,10 @@ function vSettings(){
     <ol class="steps muted"><li>Dùng trên máy tính hoặc điện thoại: mở địa chỉ web của ứng dụng, đăng nhập Google, nhập mật khẩu mã hóa.</li>
       <li>Mọi thay đổi tự lưu vào file trên Drive; mỗi ngày tự có thêm một bản trong thư mục <code>SaoLuu</code>.</li>
       <li>Tự khóa sau 15 phút không thao tác (trừ thiết bị đã chọn "Ghi nhớ trên thiết bị này").</li></ol></div>
-  <div class="card fsonly"><h2>📁 Nơi lưu trữ tài liệu (chỉ máy tính, Chrome/Edge)</h2>
-    <p class="muted">Chọn thư mục trên máy này cho từng loại tài liệu (ví dụ <code>01_HopDong</code>, <code>02_BaoCao</code>). Loại nào chưa chọn thì file Excel được tải về thư mục Downloads như thường lệ. Thư mục này chỉ nhớ trên thiết bị đang dùng; lần mở sau trình duyệt có thể hỏi lại quyền.</p>
+  <div class="card"><h2>📁 Nơi lưu trữ tài liệu đính kèm</h2>
+    <p class="muted">File hợp đồng, phụ lục và hồ sơ thanh toán đính kèm trong trang chi tiết hợp đồng được lưu trên <b>Google Drive</b>, trong thư mục <code>${GCFG.folder}/TaiLieu/&lt;số hợp đồng&gt;/…</code> (hồ sơ thanh toán có thêm thư mục con theo tháng). Dùng được trên cả máy tính và điện thoại, không cần chọn thư mục hay cấp quyền lại. Mỗi file tối đa 25 MB. File đính kèm <b>không</b> được mã hóa bằng mật khẩu như file dữ liệu: ai mở được Drive của tài khoản này đều xem được. Không đổi tên hay di chuyển các file này trong Drive bằng tay; hãy dùng nút "Gỡ" trong phần mềm.</p></div>
+  <div class="card fsonly"><h2>📂 Thư mục trên máy này (chỉ máy tính, Chrome/Edge)</h2>
+    <p class="muted">Dùng cho file xuất ra (báo cáo, biểu mẫu), file nhận về để nhập, và để mở các file đính kèm <b>cũ</b> đã lưu trong thư mục máy trước đây. Loại nào chưa chọn thì file Excel được tải về thư mục Downloads như thường lệ. Thư mục này chỉ nhớ trên thiết bị đang dùng; lần mở sau trình duyệt có thể hỏi lại quyền.</p>
     <div class="tbl"><table><thead><tr><th>Loại tài liệu</th><th>Dùng để</th><th>Thư mục đã chọn</th><th></th></tr></thead><tbody>
     ${FOLDERS.map(([k,t,d])=>{const f=FOLD[k];return`<tr><td><b>${t}</b></td><td class="muted" style="white-space:normal;min-width:260px">${d}</td>
       <td>${f?esc(f.h.name)+(f.pend?' <span style="color:#b45309">⚠ cần cấp lại quyền</span>':''):'<span class="muted">— chưa chọn (tải về Downloads)</span>'}</td>
