@@ -41,4 +41,6 @@ Phải chạy lệnh **trong thư mục repo**, nếu không server sẽ phục 
 - Giao tiếp và giao diện bằng **tiếng Việt**. Giữ nguyên phong cách code gọn, một file.
 - Không đưa vào repo: `client_secret*`, `*.key`, `*.pem`, `.env`, `du-lieu-hop-dong*.json`, `SaoLuu/` (đã có trong `.gitignore`).
 - Không thay đổi định dạng dữ liệu hay mã hóa theo cách làm hỏng khả năng đọc dữ liệu hiện có; nếu cần đổi, phải có đường nâng cấp và sao lưu trước.
+- **Chạy lệnh/test trong cửa sổ Terminal của app** (công cụ `run_in_terminal`) để chủ repo nhìn thấy trực tiếp, không chạy ngầm bằng Bash; chỉ dùng Bash cho việc ngắn cần đọc kết quả. Dùng lại cùng một tab, đọc kết quả bằng `read_terminal` rồi báo cáo. Không cần chủ repo nhắc lại.
+- Đồng bộ git: `sync-git.bat` (hoặc `powershell -ExecutionPolicy Bypass -File .\sync-git.ps1 [-Message "..."]`) = commit → pull --rebase → push. Vì script có push nên vẫn phải được chủ repo đồng ý trước khi chạy (xem Quy trình mục 3).
 - Hạn chế đã biết: đính kèm tài liệu/xuất Excel vào thư mục máy chỉ có trên Chrome/Edge máy tính; không dùng offline cho dữ liệu; mỗi phiên mới cần một lần bấm đăng nhập Google sau khi hết 1 giờ hoặc đóng tab.
