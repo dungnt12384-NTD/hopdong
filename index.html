@@ -95,6 +95,8 @@ ol.steps{margin:6px 0 0;padding-left:20px}ol.steps li{margin-bottom:4px}
 @media(max-width:640px){.fgrid{grid-template-columns:1fr}}
 .nofs .fsonly{display:none!important}
 tr.click:focus-visible,.alerts li:focus-visible{outline:2px solid var(--pri);outline-offset:-2px}
+details.more summary{cursor:pointer;color:var(--pri);font-weight:600;margin:12px 0 2px}
+.nv-hide{display:none!important}
 @media(max-width:640px){input,select,textarea{font-size:16px}}   /* iPhone/iPad không tự phóng to khi bấm vào ô nhập */
 @media(pointer:coarse){button.sm{padding:7px 11px}nav button{padding:13px 14px}}   /* nút đủ lớn để chạm */
 @media print{header,nav,.back,.bar .right,button,#toast,#gate,.drop,dialog{display:none!important}
@@ -105,7 +107,7 @@ tr.click:focus-visible,.alerts li:focus-visible{outline:2px solid var(--pri);out
 <header>
   <h1>📁 Quản lý Hợp đồng &amp; Nhà thầu</h1>
   <div class="gs"><input id="gq" placeholder="Tìm nhanh: số HĐ, nhà thầu, MST, chức danh, người phụ trách..."></div>
-  <label>Ngày xem <input type="date" id="refDate"></label>
+  <label id="refLbl" style="display:none">Ngày xem <input type="date" id="refDate"></label>
   <button id="syncBtn" onclick="syncClick()" style="border:none;color:#fff;background:#475569;font-size:12.5px;white-space:nowrap">○ Chỉ lưu trên máy này</button>
 </header>
 <nav id="nav">
@@ -454,8 +456,7 @@ async function attachFiles(cid,kind,aid){
   if(badExt.length)return alert(`Định dạng không được phép đính kèm:\n${badExt.map(f=>'• '+f.name).join('\n')}\n\nChỉ nhận: PDF, ảnh (JPG, PNG, GIF, WEBP, HEIC), Word (DOC, DOCX), Excel (XLS, XLSX), PowerPoint (PPT, PPTX), TXT, CSV, ZIP.\nChưa có file nào được tải lên.`);
   const big=fl.filter(f=>f.size>MAXATT);
   if(big.length)return alert(`Giới hạn mỗi file đính kèm là 25 MB. File quá lớn:\n${big.map(f=>`• ${f.name} (${fsz(f.size)})`).join('\n')}\n\nHãy nén file (xuất PDF dung lượng nhỏ, giảm độ phân giải ảnh) hoặc tách nhỏ rồi đính kèm lại.\nChưa có file nào được tải lên.`);
-  let ym='';if(kind==='tt'){const p=prompt('Hồ sơ thanh toán của tháng nào? (YYYY-MM)',ymOf(refStr()));if(!p)return;if(!/^\d{4}-\d{2}$/.test(p.trim()))return alert('Tháng không hợp lệ');ym=p.trim()}
-  const subs=kind==='tt'?[c.no,ym]:kind==='pl'?[c.no,'PhuLuc']:[c.no];let done=0;
+  const run=async ym=>{const subs=kind==='tt'?[c.no,ym]:kind==='pl'?[c.no,'PhuLuc']:[c.no];let done=0;
   try{const d=await subDir(ROOT,['TaiLieu',...subs],true);c.files??=[];
     for(const f of fl){toast(`⟳ Đang tải lên Google Drive ${done+1}/${fl.length}: ${f.name}`,'warn');
       const n=await uniqueName(d,f.name),fh=await d.getFileHandle(n,{create:true}),w=await fh.createWritable();await w.write(f);await w.close();
@@ -464,7 +465,9 @@ async function attachFiles(cid,kind,aid){
       log('Đính kèm file',`${c.no}: ${n}`,`${KINDLBL[kind]} → Google Drive/TaiLieu/${sub}`)}
     toast(`✓ Đã đính kèm ${done} file lên Google Drive`)}
   catch(e){alert(`Không đính kèm được hết${done?` (đã xong ${done}/${fl.length} file)`:''}: `+e.message)}
-  finally{if(done){save();render()}}
+  finally{if(done){save();render()}}};
+  if(kind==='tt')openForm('Hồ sơ thanh toán của tháng nào?',[{k:'ym',label:'Chọn tháng của hồ sơ (kỳ thanh toán)',type:'month',req:1,full:1}],{ym:ymOf(refStr())},o=>{setTimeout(()=>run(o.ym),0)});
+  else await run('');
 }
 async function openAttach(cid,fid,dl){const c=contract(cid),f=c.files.find(x=>x.id===fid);
   if(f.where==='drive'){
@@ -589,11 +592,14 @@ function field(f,val){
   if(f.type==='select')ctl=`<select id="${id}">${f.opts.map(([o,l])=>`<option value="${esc(o)}" ${String(o)===String(v)?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
   else if(f.type==='textarea')ctl=`<textarea id="${id}" rows="2">${esc(v)}</textarea>`;
   else ctl=`<input id="${id}" type="${f.type||'text'}" value="${esc(v)}" ${f.type==='number'?'step="any" min="0"':''} placeholder="${esc(f.ph||'')}">`;
-  return `<label class="${f.full?'full':''}">${esc(f.label)}${f.req?' <b style="color:#b91c1c">*</b>':''}${ctl}${f.hint?`<span class="hint">${esc(f.hint)}</span>`:''}</label>`;
+  return `<label class="${f.full?'full':''}${f.cls?' '+f.cls:''}">${esc(f.label)}${f.req?' <b style="color:#b91c1c">*</b>':''}${ctl}${f.hint?`<span class="hint">${esc(f.hint)}</span>`:''}</label>`;
 }
 function openForm(title,fields,data,onSave,wide){
   $('#dlg').className=wide?'wide':'';$('#dlgTitle').textContent=title;$('#dlgErr').textContent='';
-  $('#dlgBody').innerHTML=`<div class="fgrid">${fields.map(f=>field(f,data[f.k])).join('')}</div>`;
+  const main=fields.filter(f=>!f.more),more=fields.filter(f=>f.more),hasVal=more.some(f=>f.k!=='currency'&&(data[f.k]??'')!=='');   // trường ít dùng (more) gom vào mục "Thêm thông tin"
+  $('#dlgBody').innerHTML=`<div class="fgrid">${main.map(f=>field(f,data[f.k])).join('')}</div>${more.length?`<details class="more" ${hasVal?'open':''}><summary>Thêm thông tin (${more.map(f=>f.label.split(' (')[0]).join(', ')})</summary><div class="fgrid" style="margin-top:8px">${more.map(f=>field(f,data[f.k])).join('')}</div></details>`:''}`;
+  fields.filter(f=>f.money).forEach(f=>{const el=$('#f_'+f.k),h=document.createElement('span');h.className='hint';h.style.color='#1d4ed8';el.parentElement.appendChild(h);   // hiện số tiền có dấu chấm khi gõ
+    const up=()=>{h.textContent=el.value!==''&&+el.value>=1000?'= '+fmt(el.value):''};el.addEventListener('input',up);up()});
   const show=(f,v)=>{if(v===''||v==null)return'(trống)';if(f.type==='select'){const o=f.opts.find(([a])=>String(a)===String(v));return o?o[1]:v}return f.type==='number'?fmt(v):f.type==='date'?vn(v):v};
   dlgSave=()=>{const o={};for(const f of fields){let v=$('#f_'+f.k).value.trim();if(f.type==='number')v=v===''?'':+v;if(f.req&&(v===''||v==null))return`Vui lòng nhập "${f.label}"`;o[f.k]=v}
     DIFF=fields.filter(f=>String(data[f.k]??'')!==String(o[f.k]??'')).map(f=>`${f.label}: ${show(f,data[f.k])} → ${show(f,o[f.k])}`).join('; ');return onSave(o)};
@@ -616,38 +622,72 @@ function delVendor(id){const v=S.vendors.find(x=>x.id===id);if(S.contracts.some(
   if(confirm('Xóa nhà thầu '+v.name+'?')){S.vendors=S.vendors.filter(x=>x.id!==id);log('Xóa nhà thầu',v.code+' - '+v.name);save();UI.page='vendors';UI.id=null;render()}}
 
 function contractFields(){return[{k:'no',label:'Số hợp đồng',req:1,ph:'HĐ-MP-2026-001'},{k:'type',label:'Loại hợp đồng',type:'select',opts:TYPES.map(t=>[t,t])},
-  {k:'vendorId',label:'Nhà thầu',req:1,type:'select',opts:[['','— Chọn nhà thầu —'],...S.vendors.map(v=>[v.id,v.code+' - '+v.name])]},
+  {k:'vendorId',label:'Nhà thầu',req:1,type:'select',opts:[['','— Chọn nhà thầu —'],...S.vendors.map(v=>[v.id,v.code+' - '+v.name]),['__new','➕ Nhà thầu mới (nhập bên dưới)']]},
+  {k:'nvName',label:'Tên nhà thầu mới *',cls:'nv',full:1},{k:'nvTax',label:'Mã số thuế (nhà thầu mới)',cls:'nv'},{k:'nvPhone',label:'Điện thoại (nhà thầu mới)',cls:'nv'},
   {k:'status',label:'Tình trạng',type:'select',opts:[['draft','Dự thảo'],['signed','Đã ký'],['liq','Đã thanh lý']]},
   {k:'signDate',label:'Ngày ký',type:'date'},{k:'start',label:'Ngày hiệu lực',type:'date',req:1},
-  {k:'end',label:'Ngày hết hạn HĐ',type:'date',hint:'Để trống = tự tính theo chức danh hết hạn muộn nhất'},
-  {k:'value',label:'Giá trị hợp đồng',type:'number',hint:'Để trống = tự tính (SL × đơn giá × số tháng)'},
-  {k:'currency',label:'Loại tiền',type:'select',opts:[['VND','VND'],['USD','USD']]},
-  {k:'bondAmt',label:'Bảo lãnh thực hiện (số tiền)',type:'number'},{k:'bondEnd',label:'Bảo lãnh hết hạn',type:'date'},
-  {k:'owner',label:'Người phụ trách'},{k:'dept',label:'Phòng ban'},
-  {k:'link',label:'Đường dẫn file scan HĐ',full:1,ph:'https://...sharepoint.com/... hoặc C:\\HopDong\\HD-001.pdf'},{k:'note',label:'Ghi chú',type:'textarea',full:1}]}
+  {k:'end',more:1,label:'Ngày hết hạn HĐ',type:'date',hint:'Để trống = tự tính theo chức danh hết hạn muộn nhất'},
+  {k:'value',more:1,money:1,label:'Giá trị hợp đồng',type:'number',hint:'Để trống = tự tính (SL × đơn giá × số tháng)'},
+  {k:'currency',more:1,label:'Loại tiền',type:'select',opts:[['VND','VND'],['USD','USD']]},
+  {k:'bondAmt',more:1,money:1,label:'Bảo lãnh thực hiện (số tiền)',type:'number'},{k:'bondEnd',more:1,label:'Bảo lãnh hết hạn',type:'date'},
+  {k:'owner',label:'Người phụ trách'},{k:'dept',more:1,label:'Phòng ban'},
+  {k:'link',more:1,label:'Đường dẫn file scan HĐ',full:1,ph:'https://...sharepoint.com/... hoặc C:\\HopDong\\HD-001.pdf'},{k:'note',more:1,label:'Ghi chú',type:'textarea',full:1}]}
 function editContract(id){
-  if(!S.vendors.length)return alert('Hãy thêm nhà thầu trước.');
-  const c=id?contract(id):{status:'signed',type:TYPES[0],currency:'VND',vendorId:UI.page==='vendor'?UI.id:''};
-  openForm(id?'Sửa hợp đồng':'Thêm hợp đồng',contractFields(),c,o=>{
+  const c=id?contract(id):{status:'signed',type:TYPES[0],currency:'VND',vendorId:UI.page==='vendor'?UI.id:(S.vendors.length?'':'__new')};
+  openForm(id?'Sửa hợp đồng':'Thêm hợp đồng',contractFields(),c,o0=>{
+    const r=takeVendor(o0);if(r.err)return r.err;const o=r.o;
     if(S.contracts.some(x=>x.id!==id&&norm(x.no)===norm(o.no)))return'Số hợp đồng đã tồn tại';
     if(o.end&&o.end<o.start)return'Ngày hết hạn phải sau ngày hiệu lực';
     if(o.link&&!okLink(o.link))return LINKMSG;
-    if(id){Object.assign(c,o);log('Sửa hợp đồng',o.no,DIFF)}else{const n={id:uid(),positions:[],amendments:[],...o};S.contracts.push(n);log('Thêm hợp đồng',o.no);UI.page='contract';UI.id=n.id}},1);
+    if(r.v){S.vendors.push(r.v);log('Thêm nhà thầu',`${r.v.code} - ${r.v.name} (thêm cùng hợp đồng)`)}
+    if(id){Object.assign(c,o);log('Sửa hợp đồng',o.no,DIFF)}else{const n={id:uid(),positions:[],amendments:[],...o};S.contracts.push(n);log('Thêm hợp đồng',o.no);UI.page='contract';UI.id=n.id;setTimeout(()=>bulkPos(n.id),80)}},1);   // hợp đồng mới: mở luôn bảng nhập chức danh
+  vendorToggle();
 }
+/* Chọn "➕ Nhà thầu mới" trong form hợp đồng: hiện ô nhập tên/MST/điện thoại, tạo nhà thầu cùng lúc với hợp đồng */
+function vendorToggle(){const sel=$('#f_vendorId');if(!sel)return;const tog=()=>document.querySelectorAll('#dlgBody label.nv').forEach(l=>l.classList.toggle('nv-hide',sel.value!=='__new'));sel.addEventListener('change',tog);tog()}
+function takeVendor(o0){const{nvName,nvTax,nvPhone,...o}=o0;if(o.vendorId!=='__new')return{o};
+  const name=String(nvName||'').trim(),tax=String(nvTax||'').trim();
+  if(!name)return{err:'Nhập tên nhà thầu mới'};
+  if(tax&&S.vendors.some(v=>v.tax===tax))return{err:'Mã số thuế này đã có ở một nhà thầu — hãy chọn nhà thầu đó trong danh sách'};
+  if(S.vendors.some(v=>norm(v.name)===norm(name)))return{err:'Đã có nhà thầu cùng tên — hãy chọn nhà thầu đó trong danh sách'};
+  let n=S.vendors.length+1,code;do{code='NT-'+String(n++).padStart(3,'0')}while(S.vendors.some(v=>norm(v.code)===norm(code)));
+  const v={id:uid(),code,name,tax,addr:'',contact:'',phone:String(nvPhone||'').trim(),email:'',bank:'',status:'active',rating:'',note:''};
+  o.vendorId=v.id;return{o,v}}
+/* Nhập nhiều chức danh một lần (bảng, gõ liên tục, Enter/Tab sang ô kế) */
+const bpRow=()=>`<tr><td><input data-k="code" style="width:70px" placeholder="Mã"></td><td><input data-k="title" style="min-width:190px" placeholder="Chức danh"></td><td><input data-k="qty" type="number" min="0" step="any" style="width:70px" value="1"></td><td><input data-k="rate" type="number" min="0" step="any" style="width:130px" placeholder="Đơn giá/tháng"><div class="hint" style="color:#1d4ed8"></div></td><td><input data-k="months" type="number" min="0" step="any" style="width:70px"></td><td><input data-k="start" type="date"></td></tr>`;
+function bpAdd(n){$('#bpb').insertAdjacentHTML('beforeend',bpRow().repeat(n||3))}
+function bulkPos(cid){const c=contract(cid);if(!c)return;
+  $('#dlg').className='wide';$('#dlgTitle').textContent='Nhập các chức danh — '+c.no;$('#dlgErr').textContent='';
+  $('#dlgBody').innerHTML=`<p class="muted">Gõ mỗi chức danh một dòng; bấm Enter hoặc Tab để sang ô kế. Dòng để trống thì bỏ qua. "Ngày bắt đầu" để trống = theo ngày hiệu lực hợp đồng. Bấm "Hủy" nếu muốn nhập sau.</p>
+    <div class="tbl"><table><thead><tr><th>Mã</th><th>Chức danh *</th><th>Số lượng *</th><th>Đơn giá / người / tháng *</th><th>Thời hạn (tháng) *</th><th>Ngày bắt đầu</th></tr></thead><tbody id="bpb">${bpRow().repeat(5)}</tbody></table></div>
+    <button type="button" onclick="bpAdd(3)" style="margin-top:8px">+ Thêm 3 dòng</button>`;
+  const tb=$('#bpb');
+  tb.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const all=[...tb.querySelectorAll('input')],i=all.indexOf(e.target);(all[i+1]||all[i]).focus()}});
+  tb.addEventListener('input',e=>{if(e.target.dataset.k==='rate'){const h=e.target.nextElementSibling;h.textContent=+e.target.value>=1000?'= '+fmt(e.target.value):''}});
+  dlgSave=()=>{const rows=[...tb.querySelectorAll('tr')].map(tr=>{const g=k=>tr.querySelector(`[data-k="${k}"]`).value.trim();return{code:g('code'),title:g('title'),qty:g('qty'),rate:g('rate'),months:g('months'),start:g('start')}}).filter(r=>r.title||r.rate||r.months);
+    if(!rows.length)return'Chưa có chức danh nào để thêm';
+    for(let i=0;i<rows.length;i++){const r=rows[i],n=`Dòng ${i+1}${r.title?' ('+r.title+')':''}`;
+      if(!r.title)return`${n}: thiếu chức danh`;if(!(+r.qty>0))return`${n}: số lượng phải lớn hơn 0`;if(!(+r.rate>0))return`${n}: thiếu đơn giá`;if(!(+r.months>0))return`${n}: thiếu thời hạn (tháng)`}
+    rows.forEach(r=>c.positions.push({id:uid(),code:r.code,title:r.title,qty:+r.qty,rate:+r.rate,months:+r.months,start:r.start,note:''}));
+    log('Thêm chức danh',`${c.no}: thêm ${rows.length} chức danh (nhập nhiều)`,rows.map(r=>r.title+' — '+posSum(r)).join('; '))};
+  $('#dlg').showModal();setTimeout(()=>{const f=tb.querySelector('input');if(f)f.focus()},50)}
 /* Nhân bản (gia hạn): hợp đồng mới ở trạng thái Dự thảo, hiệu lực từ ngày sau khi HĐ cũ hết hạn, chép nhà thầu + chức danh (ngày bắt đầu chức danh để trống = theo ngày hiệu lực mới). Không chép phụ lục, file đính kèm, thanh toán, bảo lãnh, giá trị nhập tay. */
 function dupContract(id){const c=contract(id);
   const d={...c,no:'',status:'draft',signDate:'',start:iso(new Date(parse(cEnd(c)).getTime()+DAY)),end:'',value:'',bondAmt:'',bondEnd:'',link:'',note:''};
-  openForm('Nhân bản hợp đồng '+c.no+' (gia hạn / hợp đồng mới)',contractFields(),d,o=>{
+  openForm('Nhân bản hợp đồng '+c.no+' (gia hạn / hợp đồng mới)',contractFields(),d,o0=>{
+    const r=takeVendor(o0);if(r.err)return r.err;const o=r.o;
     if(S.contracts.some(x=>norm(x.no)===norm(o.no)))return'Số hợp đồng đã tồn tại';
     if(o.end&&o.end<o.start)return'Ngày hết hạn phải sau ngày hiệu lực';
     if(o.link&&!okLink(o.link))return LINKMSG;
+    if(r.v){S.vendors.push(r.v);log('Thêm nhà thầu',`${r.v.code} - ${r.v.name} (thêm cùng hợp đồng)`)}
     const n={id:uid(),...o,positions:c.positions.map(p=>({id:uid(),code:p.code,title:p.title,qty:p.qty,rate:p.rate,months:p.months,start:'',note:p.note||''})),amendments:[]};
-    S.contracts.push(n);log('Nhân bản hợp đồng',`${o.no} (từ ${c.no}), chép ${n.positions.length} chức danh`);UI.page='contract';UI.id=n.id},1)}
+    S.contracts.push(n);log('Nhân bản hợp đồng',`${o.no} (từ ${c.no}), chép ${n.positions.length} chức danh`);UI.page='contract';UI.id=n.id},1);
+  vendorToggle()}
 function delContract(id){const c=contract(id);const np=S.payments.filter(p=>p.contractId===id).length;
   if(!confirm(`Xóa hợp đồng ${c.no}${np?` cùng ${np} lần thanh toán`:''}? Không thể hoàn tác (trừ khi có file sao lưu).`))return;
   S.contracts=S.contracts.filter(x=>x.id!==id);S.payments=S.payments.filter(p=>p.contractId!==id);log('Xóa hợp đồng',c.no);save();UI.page='contracts';UI.id=null;render()}
 
-const POS_F=[{k:'code',label:'Mã vị trí'},{k:'title',label:'Chức danh',req:1},{k:'qty',label:'Số lượng',type:'number',req:1},{k:'rate',label:'Đơn giá / người / tháng',type:'number',req:1},
+const POS_F=[{k:'code',label:'Mã vị trí'},{k:'title',label:'Chức danh',req:1},{k:'qty',label:'Số lượng',type:'number',req:1},{k:'rate',money:1,label:'Đơn giá / người / tháng',type:'number',req:1},
   {k:'months',label:'Thời hạn (tháng)',type:'number',req:1},{k:'start',label:'Ngày bắt đầu',type:'date',hint:'Để trống = ngày hiệu lực HĐ'},{k:'note',label:'Ghi chú',full:1}];
 function editPos(cid,pid){const c=contract(cid);const p=pid?c.positions.find(x=>x.id===pid):{qty:1};
   openForm(pid?'Sửa chức danh':'Thêm chức danh — '+c.no,POS_F,p,o=>{if(!(o.months>0))return'Thời hạn phải > 0';
@@ -717,6 +757,9 @@ function payWarn(){
   else if(val&&(others+cur)/val>=.9)w.push(`Lũy kế sau kỳ này đạt ${Math.round((others+cur)/val*100)}% giá trị hợp đồng.`);
   $('#pWarn').innerHTML=w.length?`<div class="warnbox">⚠ ${w.map(esc).join('<br>⚠ ')}</div>`:'';
 }
+function markPaid(id){const p=S.payments.find(x=>x.id===id);if(!p)return;const c=contract(p.contractId);
+  if(!confirm(`Ghi nhận ĐÃ THANH TOÁN kỳ ${vnm(p.period)} của ${c?c.no:'?'} (${fmt(p.amount)}${cur(c)==='USD'?' USD':''}) vào ngày hôm nay ${vn(today())}?\n(Muốn ghi ngày khác: bấm Hủy rồi dùng nút Sửa.)`))return;
+  p.payDate=today();log('Sửa thanh toán',`${c?c.no:'?'} kỳ ${vnm(p.period)}: ${fmt(p.amount)}`,`Ngày thanh toán: (trống) → ${vn(p.payDate)}`);save();render();toast('✓ Đã ghi nhận thanh toán')}
 function delPay(id){const p=S.payments.find(x=>x.id===id);const c=contract(p.contractId);if(confirm(`Xóa thanh toán kỳ ${vnm(p.period)} của ${c?.no}?`)){S.payments=S.payments.filter(x=>x.id!==id);log('Xóa thanh toán',`${c?.no} kỳ ${vnm(p.period)}`,`Đã xóa: ${fmt(p.amount)}; số đề nghị ${p.reqNo||'—'}; hóa đơn ${p.invNo||'—'}`);save();render()}}
 
 /* ===== Cảnh báo ===== */
@@ -757,6 +800,8 @@ $('#gq').oninput=()=>{UI.q=$('#gq').value;if(UI.q.trim())go('search');else go('d
 $('#refDate').value=today();$('#refDate').oninput=render;
 
 function render(){
+  /* "Ngày xem" chỉ hiện ở tab Báo cáo; rời tab khác thì tự về hôm nay để các màn hình luôn theo ngày thật */
+  const rd=$('#refDate');if(UI.page!=='reports'&&rd.value!==today())rd.value=today();$('#refLbl').style.display=UI.page==='reports'?'':'none';
   const navMap={contract:'contracts',vendor:'vendors',search:''};const np=navMap[UI.page]??UI.page;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.p===np));
   ({dash:vDash,contracts:vContracts,contract:vContract,vendors:vVendors,vendor:vVendor,payments:vPayments,reports:vReports,settings:vSettings,search:vSearch,import:vImport,history:vHistory}[UI.page]||vDash)();
@@ -797,8 +842,9 @@ function vDash(){
     <div class="kpi"><b>${fmtCur(paid)}</b><span>Đã thanh toán (${val.VND?Math.round(paid.VND/val.VND*100):0}%${val.USD?' · % tính theo VND':''})</span></div>
     <div class="kpi"><b>${fmtCur(mon)}</b><span>Ghi nhận thanh toán kỳ ${vnm(thisYm)}</span></div>
   </div>
-  <div class="card"><h2>⚠ Việc cần xử lý (${A.length})</h2>
-    ${A.length?`<ul class="alerts">${A.map(a=>`<li class="${a.lvl}" onclick="go('contract','${a.cid}')"><span class="badge b-${a.lvl==='bad'?'bad':a.lvl==='warn'?'warn':'info'}">${a.lvl==='bad'?'Khẩn':a.lvl==='warn'?'Cần chú ý':'Lưu ý'}</span>${esc(a.t)}</li>`).join('')}</ul>`:'<p class="muted">Không có cảnh báo. 👍</p>'}
+  <div class="card"><h2>⚠ Việc cần xử lý (${A.filter(a=>a.lvl!=='info').length})</h2>
+    ${(()=>{const li=a=>`<li class="${a.lvl}" onclick="go('contract','${a.cid}')"><span class="badge b-${a.lvl==='bad'?'bad':a.lvl==='warn'?'warn':'info'}">${a.lvl==='bad'?'Khẩn':a.lvl==='warn'?'Cần chú ý':'Lưu ý'}</span>${esc(a.t)}</li>`,U=A.filter(a=>a.lvl!=='info'),N=A.filter(a=>a.lvl==='info');
+      return(U.length?`<ul class="alerts">${U.map(li).join('')}</ul>`:'<p class="muted">Không có việc khẩn. 👍</p>')+(N.length?`<details class="more"><summary>ℹ Lưu ý nhẹ (${N.length}) — bấm để xem</summary><ul class="alerts">${N.map(li).join('')}</ul></details>`:'')})()}
   </div>
   <div class="card"><h2>📊 Thanh toán 12 tháng gần nhất</h2>${chartPay(thisYm)}
     <p class="muted" style="margin:4px 0 0"><span style="color:#15803d">■</span> Đã thanh toán &nbsp;<span style="color:#d97706">■</span> Chờ thanh toán · theo kỳ thanh toán, đơn vị VND${S.contracts.some(c=>c.currency==='USD')?' (hợp đồng USD không tính trong biểu đồ)':''}</p></div>
@@ -853,7 +899,7 @@ function vContract(){
     <p class="hint" style="margin:0 0 8px">⚠ Giới hạn <b>25 MB mỗi file</b> (file lớn hơn sẽ bị từ chối, không file nào được tải lên). Chỉ nhận <b>PDF, ảnh (JPG, PNG, GIF, WEBP, HEIC), Word, Excel, PowerPoint, TXT, CSV, ZIP</b>; PDF và ảnh mở xem trực tiếp, các loại khác sẽ được tải về. Nên dùng PDF nén hoặc ảnh giảm độ phân giải. Dung lượng file tính vào bộ nhớ Google Drive của tài khoản (15 GB miễn phí).${(c.files||[]).some(f=>f.size)?` Tổng dung lượng file đính kèm của hợp đồng này: <b>${fsz((c.files||[]).reduce((s,f)=>s+(f.size||0),0))}</b>.`:''}</p>
     <div class="tbl"><table><thead><tr><th>Loại</th><th>File</th><th>Nằm trong</th><th class="n">Dung lượng</th><th>Ngày đính kèm</th><th></th></tr></thead><tbody>
     ${(c.files||[]).map(f=>`<tr><td>${KINDLBL[f.kind]||f.kind}</td><td><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></td><td class="muted">${f.where==='drive'?'☁ Drive: ':'💻 Máy (cũ): '}${esc(f.sub)}${f.aid?` · ${esc((c.amendments.find(a=>a.id===f.aid)||{}).no||'')}`:''}</td><td class="n">${f.size?fsz(f.size):'—'}</td><td>${new Date(f.at).toLocaleDateString('vi-VN')}</td><td>${f.where==='drive'?`<button class="sm" title="Tải về" onclick="openAttach('${c.id}','${f.id}',true)">⬇</button> `:''}<button class="sm del" onclick="delAttach('${c.id}','${f.id}')">Gỡ</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Chưa có file đính kèm</td></tr>'}</tbody></table></div></div>
-  <div class="card"><div class="bar"><h2>Chức danh (${c.positions.length})</h2><span class="muted">Ngày hết hạn = Ngày bắt đầu + Thời hạn − 1 ngày</span><div class="right"><button class="pri" onclick="editPos('${c.id}')">+ Thêm chức danh</button></div></div>
+  <div class="card"><div class="bar"><h2>Chức danh (${c.positions.length})</h2><span class="muted">Ngày hết hạn = Ngày bắt đầu + Thời hạn − 1 ngày</span><div class="right"><button class="pri" onclick="bulkPos('${c.id}')">+ Nhập nhiều chức danh</button><button onclick="editPos('${c.id}')">+ Thêm 1 chức danh</button></div></div>
     <div class="tbl"><table><thead><tr><th>Mã</th><th>Chức danh</th><th class="n">SL</th><th class="n">Đơn giá/tháng</th><th class="n">Thời hạn</th><th>Bắt đầu</th><th>Hết hạn</th><th class="n">Còn lại</th><th>Trạng thái</th><th class="n">Giá trị</th><th>Ghi chú</th><th></th></tr></thead><tbody>
     ${c.positions.slice().sort((a,b)=>posEnd(c,a).localeCompare(posEnd(c,b))).map(p=>{const ps=pStatus(c,p);return`<tr><td>${esc(p.code)}</td><td><b>${esc(p.title)}</b></td><td class="n">${p.qty}</td><td class="n">${fmt(p.rate)}</td><td class="n">${p.months} th</td><td>${vn(posStart(c,p))}</td><td><b>${vn(posEnd(c,p))}</b></td><td class="n">${ps==='bad'?'':daysLeft(posEnd(c,p))}</td><td>${badge(ps)}</td><td class="n">${fmt(p.qty*p.rate*p.months)}</td><td class="muted">${esc(p.note)}</td>
       <td><button class="sm" onclick="editPos('${c.id}','${p.id}')">Sửa</button> <button class="sm del" onclick="delPos('${c.id}','${p.id}')">Xóa</button></td></tr>`}).join('')||'<tr><td colspan="12" class="muted">Chưa có chức danh</td></tr>'}</tbody></table></div></div>
@@ -866,7 +912,7 @@ function vContract(){
 function payTable(L,showC){
   let run=0;const tt={VND:0,USD:0};const body=L.map(p=>{const c=contract(p.contractId);tt[cur(c)]+=+p.amount||0;run+=p.amount;
     return `<tr><td><b>${vnm(p.period)}</b></td>${showC?`<td><a href="#" onclick="go('contract','${c.id}');return false">${esc(c.no)}</a></td><td>${esc(vendor(c.vendorId).name)}</td>`:''}<td>${esc(p.reqNo)}</td><td>${esc(p.invNo)}</td><td>${vn(p.payDate)}</td><td class="n"><b>${fmt(p.amount)}</b>${cur(c)==='USD'?' USD':''}</td>${showC?'':`<td class="n">${fmt(run)}</td>`}<td>${badge(p.payDate?'paid':'pending')}</td><td class="muted">${esc(p.note)}</td>
-      <td><button class="sm" onclick="editPay('${p.id}')">Sửa</button> <button class="sm del" onclick="delPay('${p.id}')">Xóa</button></td></tr>`}).join('');
+      <td>${p.payDate?'':`<button class="sm grn" onclick="markPaid('${p.id}')" title="Ghi nhận đã thanh toán hôm nay">✓ Đã trả</button> `}<button class="sm" onclick="editPay('${p.id}')">Sửa</button> <button class="sm del" onclick="delPay('${p.id}')">Xóa</button></td></tr>`}).join('');
   return `<div class="tbl"><table><thead><tr><th>Kỳ</th>${showC?'<th>Số HĐ</th><th>Nhà thầu</th>':''}<th>Số đề nghị</th><th>Số hóa đơn</th><th>Ngày TT</th><th class="n">Số tiền</th>${showC?'':'<th class="n">Lũy kế</th>'}<th>Trạng thái</th><th>Ghi chú</th><th></th></tr></thead>
   <tbody>${body||`<tr><td colspan="${showC?10:10}" class="muted">Chưa có thanh toán</td></tr>`}</tbody><tfoot><tr><td colspan="${showC?6:5}">Tổng cộng</td><td class="n">${fmtCur(tt)}</td><td colspan="4"></td></tr></tfoot></table></div>`;
 }
@@ -928,7 +974,7 @@ function vSearch(){
 function vReports(){
   HLIST=null;const t=new Date(),ym=`${t.getFullYear()}-${pad(t.getMonth()+1)}`;
   const R=(title,desc,ctl,fn)=>`<div class="card"><h2>${title}</h2><p>${desc}</p>${ctl}<button class="grn" onclick="${fn}">⬇ Xuất Excel</button></div>`;
-  $('#view').innerHTML=`<div class="rep">
+  $('#view').innerHTML=`<p class="muted" style="margin:0 0 10px">Báo cáo tính đến ngày ở ô <b>"Ngày xem"</b> (góc trên bên phải, mặc định là hôm nay). Rời tab Báo cáo thì tự trở về hôm nay.</p><div class="rep">
   ${R('1. Bảng kê thanh toán tháng','Tất cả các khoản đã ghi nhận trong kỳ, chi tiết từng chức danh, có chỗ ký. Dùng để trình duyệt thanh toán.',`<label class="muted">Kỳ <input type="month" id="r1m" value="${ym}"></label>`,"rep1()")}
   ${R('2. Hợp đồng & chức danh sắp hết hạn','Danh sách cần gia hạn hoặc lựa chọn lại nhà thầu, kèm các HĐ đã hết hạn nhưng chưa thanh lý.',`<label class="muted">Trong <input type="number" id="r2d" value="${S.settings.horizon}" style="width:80px"> ngày tới</label>`,"rep2()")}
   ${R('3. Tình hình thực hiện hợp đồng','Mỗi HĐ: giá trị, đã thanh toán, chờ thanh toán, còn lại, % thực hiện, ngày hết hạn. Báo cáo quý cho lãnh đạo.','',"rep3()")}
@@ -977,12 +1023,13 @@ function vSettings(){
       <button class="pri" onclick="bkSet()">Lưu lịch</button></div>
     <p class="muted">Lần sao lưu gần nhất: <b>${BK.last?new Date(BK.last).toLocaleString('vi-VN'):'chưa sao lưu'}</b>. Tự sao lưu chỉ chạy khi trang đang mở, và chỉ khi dữ liệu có thay đổi kể từ lần trước. Trình duyệt chỉ cho biết tên thư mục, không hiện đường dẫn đầy đủ. Khi bật "Giữ tối đa", các file <code>saoluu-*.json</code> cũ nhất trong thư mục sao lưu sẽ bị xóa.</p>
     <div class="bar"><button class="pri" onclick="backup()">⬇ Sao lưu ngay</button><button onclick="$('#rf').click()">Khôi phục từ file</button><input type="file" id="rf" accept=".json" hidden></div></div>
-  <div class="card"><h2>Dữ liệu</h2><div class="bar"><button onclick="loadSample()">Nạp dữ liệu mẫu</button>
-    <button class="del" onclick="wipeAll()">Xóa toàn bộ, bắt đầu nhập thật</button></div></div>`;
+  ${IS_LOCAL?`<div class="card"><h2>Dữ liệu (chỉ hiện khi chạy thử trên máy)</h2><div class="bar"><button onclick="loadSample()">Nạp dữ liệu mẫu</button>
+    <button class="del" onclick="wipeAll()">Xóa toàn bộ, bắt đầu nhập thật</button></div></div>`:''}`;
   $('#rf').onchange=e=>{const fl=e.target.files[0];if(!fl)return;fl.text().then(async t=>{try{const d=JSON.parse(await decText(t));if(!d.contracts)throw 0;
     if(!confirm('Thay dữ liệu hiện tại bằng file sao lưu này?'))return;
     const ot=S.tomb||{};S=d;S.log??=[];S.settings??={warn:30,horizon:90};S.tomb={...ot,...(S.tomb||{})};log('Khôi phục','Từ file '+fl.name);save();alert('Đã khôi phục');go('dash')}catch(x){alert(x&&x.code==='BADPASS'?x.message+'. File sao lưu cũ có thể dùng mật khẩu khác.':x&&x.code==='NEEDPASS'?'Cần mở khóa dữ liệu (nhập mật khẩu) trước khi khôi phục.':'File không hợp lệ')}})};
 }
+const IS_LOCAL=location.hostname==='localhost'||location.hostname==='127.0.0.1';   // nút nạp mẫu / xóa toàn bộ chỉ có khi chạy thử, tránh bấm nhầm trên dữ liệu thật
 function loadSample(){
   if(confirm('Thay toàn bộ dữ liệu bằng dữ liệu mẫu?'+(DIR?'\n\nDữ liệu thật trong file cơ sở dữ liệu sẽ bị ghi đè (bản sao lưu hằng ngày nằm trong thư mục SaoLuu).':''))){const ot=S.tomb||{};S=sample();S.tomb=ot;save();go('dash')}}
 function wipeAll(){if(!confirm('XÓA TOÀN BỘ dữ liệu để bắt đầu nhập thật? Nên sao lưu trước.')||!confirm('Chắc chắn xóa hết?'))return;
@@ -1341,12 +1388,11 @@ function vImport(){
   const t=new Date(),ym=`${t.getFullYear()}-${pad(t.getMonth()+1)}`;
   const cs=S.contracts.filter(c=>c.status!=='draft'&&c.status!=='liq');
   $('#view').innerHTML=`<div class="card"><h2>Nhập từ file</h2>
-    <div class="drop" id="drop"><b>⬆ Kéo thả file vào đây, hoặc bấm để chọn file</b>Phiếu thông tin hợp đồng (.xlsx) · Bảng kê đề nghị thanh toán (.xlsx) · File hợp đồng do Claude đọc từ PDF (.json)<br><span class="muted">Hệ thống tự nhận biết loại file, cho xem trước và đối chiếu — chưa ghi gì cho đến khi bạn bấm xác nhận.</span></div>
+    <div class="drop" id="drop"><b>⬆ Kéo thả file vào đây, hoặc bấm để chọn file</b>Bảng kê đề nghị thanh toán nhà thầu gửi về (.xlsx) · File hợp đồng do Claude đọc từ bản scan (.json)<br><span class="muted">Hệ thống tự nhận biết loại file, cho xem trước và đối chiếu — chưa ghi gì cho đến khi bạn bấm xác nhận.</span></div>
     <input type="file" id="impFile" accept=".xlsx,.json,.pdf" hidden></div>
   <div id="impResult"></div>
   <div class="rep">
-    <div class="card"><h2>Mẫu 1 — Phiếu thông tin hợp đồng</h2><p>Gửi cho <b>phòng Hợp đồng</b>. Họ điền các ô màu vàng và gửi lại kèm PDF hợp đồng đã ký. Dùng chung cho cả hợp đồng mới và phụ lục.</p><button class="grn" onclick="dlTplContract()">⬇ Tải mẫu phiếu hợp đồng</button></div>
-    <div class="card"><h2>Mẫu 2 — Bảng kê đề nghị thanh toán</h2><p>Gửi cho <b>nhà thầu</b> mỗi kỳ. File đã điền sẵn chức danh, đơn giá, số ngày còn hiệu lực — nhà thầu chỉ điền số người, ngày công, số hóa đơn.</p>
+    <div class="card"><h2>Bảng kê đề nghị thanh toán (gửi nhà thầu)</h2><p>Gửi cho <b>nhà thầu</b> mỗi kỳ. File đã điền sẵn chức danh, đơn giá, số ngày còn hiệu lực — nhà thầu chỉ điền số người, ngày công, số hóa đơn.</p>
       <div class="bar"><select id="tc" style="max-width:100%">${cs.map(c=>`<option value="${c.id}">${esc(c.no)} — ${esc(vendor(c.vendorId).name)}</option>`).join('')}</select><input type="month" id="tm" value="${ym}"></div>
       <button class="grn" onclick="dlTplPay()">⬇ Tải bảng kê cho kỳ này</button></div>
     <div class="card"><h2>Quy trình 3 bước</h2><ol class="steps"><li><b>Nhận file</b> từ phòng Hợp đồng / nhà thầu (theo mẫu).</li><li><b>Kéo vào ô phía trên</b> → xem trước, đọc các điểm lệch.</li><li><b>Xác nhận</b> để ghi vào hệ thống, hoặc <b>xuất phiếu sai lệch</b> gửi trả.</li></ol>
