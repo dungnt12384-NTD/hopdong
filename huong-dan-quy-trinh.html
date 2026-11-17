@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hướng dẫn quy trình quản lý hợp đồng</title>
+<style>
+:root{--navy:#1e3a8a;--pri:#1e40af;--text:#1f2937;--muted:#6b7280;--line:#e5e7eb;--bg:#f4f6f9}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14.5px/1.55 "Segoe UI",system-ui,sans-serif}
+header{background:var(--navy);color:#fff;padding:18px 24px}
+header h1{margin:0;font-size:21px}header p{margin:4px 0 0;color:#c7d2fe;font-size:13px}
+main{max-width:1080px;margin:0 auto;padding:18px 16px 60px}
+section{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px}
+h2{margin:0 0 4px;font-size:18px;color:var(--navy)}
+h3{margin:18px 0 6px;font-size:15px}
+.sub{color:var(--muted);margin:0 0 12px;font-size:13.5px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.toolbar a,.toolbar button{font:inherit;font-size:13px;padding:6px 12px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:var(--pri);text-decoration:none;cursor:pointer}
+.life{display:flex;flex-wrap:wrap;gap:6px;align-items:stretch}
+.ph{flex:1 1 140px;border:1.5px solid #93c5fd;background:#eff6ff;border-radius:10px;padding:10px 12px;text-decoration:none;color:inherit;display:block}
+.ph b{display:block;color:var(--navy)}.ph span{font-size:12.5px;color:#475569}
+.ph.loop{border-color:#fbbf24;background:#fffbeb}.ph.end{border-color:#a78bfa;background:#f5f3ff}.ph.zero{border-color:#94a3b8;background:#f8fafc}
+.arr{align-self:center;color:#64748b;font-size:20px}
+.always{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+.always .ph{border-color:#86efac;background:#f0fdf4}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:#475569;margin:8px 0 0}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:5px;border:1.5px solid}
+.flow{overflow-x:auto;margin:6px 0 4px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin-top:6px}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:#f1f5f9;font-size:12.5px;color:#334155}
+td.s{white-space:nowrap;font-weight:700;color:var(--pri)}
+td.w{white-space:nowrap}
+kbd{background:#eef2ff;border:1px solid #c7d2fe;border-radius:4px;padding:0 5px;font:inherit;font-size:12.5px;color:#3730a3;white-space:nowrap}
+.tip{background:#fffbeb;border-left:4px solid #f59e0b;padding:8px 12px;margin:10px 0;font-size:13.5px}
+.rule{background:#fef2f2;border-left:4px solid #dc2626;padding:8px 12px;margin:10px 0;font-size:13.5px}
+pre{background:#0f172a;color:#e2e8f0;padding:12px 14px;border-radius:8px;font-size:12.5px;overflow-x:auto;line-height:1.5}
+ul{margin:6px 0;padding-left:20px}li{margin-bottom:3px}
+.cal{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.cal div{border:1px solid var(--line);border-radius:8px;padding:10px 12px}.cal b{color:var(--navy)}
+@media print{body{background:#fff}header{background:#fff;color:#000;border-bottom:2px solid #000}header p{color:#333}.toolbar{display:none}section{border:none;padding:8px 0;break-inside:auto}h2{break-after:avoid}.flow svg{max-width:100%!important}tr{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Hướng dẫn quy trình quản lý hợp đồng &amp; thanh toán</h1>
+  <p>Dùng kèm phần mềm “Quản lý Hợp đồng &amp; Nhà thầu” · Sơ đồ tổng quát và hướng dẫn từng bước</p>
+</header>
+<main>
+<div class="toolbar"><a href="quan-ly-hop-dong.html">← Mở phần mềm</a><button onclick="print()">🖨 In / Lưu PDF</button>
+  <a href="#p0">0. Thiết lập</a><a href="#pA">A. Tiếp nhận HĐ</a><a href="#pB">B. Thanh toán</a><a href="#pC">C. Theo dõi</a><a href="#pD">D. Phụ lục</a><a href="#pE">E. Báo cáo</a><a href="#pF">F. Thanh lý</a><a href="#pG">G. Sao lưu</a><a href="#pH">H. Dùng chung</a><a href="#lich">Lịch công việc</a><a href="#xl">Xử lý tình huống</a></div>
+
+<section>
+  <h2>Sơ đồ tổng quát — vòng đời một hợp đồng</h2>
+  <p class="sub">Mỗi hợp đồng đi từ trái sang phải. Khối B lặp lại hằng tháng cho đến khi hết hạn. Bấm vào từng khối để tới hướng dẫn chi tiết.</p>
+  <div class="life">
+    <a class="ph zero" href="#p0"><b>0. Thiết lập</b><span>Làm một lần: quy ước mã, thư mục, gửi mẫu cho các bên</span></a><span class="arr">→</span>
+    <a class="ph" href="#pA"><b>A. Tiếp nhận hợp đồng</b><span>Nhận phiếu + PDF từ phòng Hợp đồng, nhập vào hệ thống</span></a><span class="arr">→</span>
+    <a class="ph loop" href="#pB"><b>B. Thanh toán hằng tháng ↻</b><span>Nhận hồ sơ nhà thầu, đối chiếu, ghi nhận, trình duyệt</span></a><span class="arr">→</span>
+    <a class="ph" href="#pD"><b>D. Phụ lục / gia hạn</b><span>Khi có thay đổi đơn giá, số lượng, thời hạn</span></a><span class="arr">→</span>
+    <a class="ph end" href="#pF"><b>F. Hết hạn &amp; thanh lý</b><span>Chốt công nợ, đóng hợp đồng, lưu hồ sơ</span></a>
+  </div>
+  <div class="always">
+    <a class="ph" href="#pC"><b>C. Theo dõi cảnh báo — hằng tuần</b><span>Mở “Tổng quan”, xử lý việc Khẩn → Cần chú ý → Lưu ý</span></a>
+    <a class="ph" href="#pE"><b>E. Báo cáo — tháng / quý</b><span>Xuất Excel đã định dạng, gửi đúng người nhận</span></a>
+    <a class="ph" href="#pG"><b>G. Sao lưu — thứ Sáu hằng tuần</b><span>Tải file sao lưu, lưu vào OneDrive</span></a>
+  </div>
+  <div class="tip"><b>3 nguyên tắc để không sót:</b> (1) Mọi dữ liệu vào hệ thống đều đi qua mục <kbd>Nhập từ file</kbd> hoặc form nhập — không ghi ngoài sổ. (2) Không thanh toán khi hệ thống còn báo <b>Lệch</b> mà chưa có giải trình. (3) Mỗi thứ Hai xem <kbd>Tổng quan</kbd>, mỗi thứ Sáu <kbd>Sao lưu</kbd>.</div>
+</section>
+
+<section id="p0">
+  <h2>0. Thiết lập ban đầu (làm một lần)</h2>
+  <table><tr><th>Bước</th><th>Làm gì</th><th>Kết quả cần có</th></tr>
+  <tr><td class="s">0.1</td><td>Thống nhất <b>quy ước mã</b>: nhà thầu <kbd>NT-001</kbd>, hợp đồng <kbd>HĐ-[loại]-[năm]-[số]</kbd> (ví dụ HĐ-MP-2026-001), chức danh <kbd>MP01</kbd>… Mã chức danh phải trùng với mã ghi trong hợp đồng/phụ lục giá.</td><td>Một trang quy ước gửi phòng Hợp đồng</td></tr>
+  <tr><td class="s">0.2</td><td>Tạo <b>cấu trúc thư mục</b> trên OneDrive (xem mẫu bên dưới). File PDF đặt tên trùng số hợp đồng.</td><td>Thư mục sẵn sàng</td></tr>
+  <tr><td class="s">0.3</td><td>Mở phần mềm → <kbd>Cài đặt &amp; Sao lưu</kbd> → <kbd>Xóa toàn bộ, bắt đầu nhập thật</kbd> (xóa dữ liệu mẫu). Đặt ngưỡng cảnh báo (mặc định 30 và 90 ngày).</td><td>Hệ thống trống, sẵn sàng</td></tr>
+  <tr><td class="s">0.4</td><td><kbd>Nhập từ file</kbd> → <kbd>Tải mẫu phiếu hợp đồng</kbd>. Gửi <b>Mẫu 1</b> cho phòng Hợp đồng kèm yêu cầu: mỗi hợp đồng/phụ lục gửi 1 phiếu Excel + PDF đã ký; không đổi tên sheet và cột A.</td><td>Phòng Hợp đồng đồng ý dùng mẫu</td></tr>
+  <tr><td class="s">0.5</td><td>Thông báo cho <b>nhà thầu</b>: hằng tháng nộp bảng kê theo <b>Mẫu 2</b> do bạn gửi, hạn nộp cố định (ví dụ trước ngày 5), kèm hóa đơn, bảng chấm công có xác nhận, biên bản nghiệm thu.</td><td>Nhà thầu xác nhận</td></tr>
+  <tr><td class="s">0.6</td><td>Nhập các <b>hợp đồng đang chạy</b> (theo quy trình A) và các kỳ đã thanh toán trước đó (mục <kbd>Thanh toán</kbd> → <kbd>+ Ghi nhận thanh toán</kbd>, nhập ngày thanh toán).</td><td>Lũy kế đã thanh toán đúng với sổ kế toán</td></tr>
+  <tr><td class="s">0.7</td><td><kbd>Cài đặt &amp; Sao lưu</kbd> → <kbd>Sao lưu</kbd>, lưu file vào thư mục <code>99_SaoLuu</code>.</td><td>Có file sao lưu đầu tiên</td></tr></table>
+<pre>QuanLyHopDong/
+├─ quan-ly-hop-dong.html          ← phần mềm
+├─ huong-dan-quy-trinh.html       ← tài liệu này
+├─ 01_HopDong/
+│   └─ HĐ-MP-2026-001/
+│       ├─ HĐ-MP-2026-001.pdf            (bản đã ký)
+│       ├─ HĐ-MP-2026-001_Phieu.xlsx     (phiếu thông tin)
+│       ├─ PhuLuc/  PL-01.pdf, PL-01_Phieu.xlsx
+│       └─ ThanhToan/
+│           └─ 2026-11/  BangKe.xlsx, HoaDon.pdf, ChamCong.pdf, NghiemThu.pdf
+├─ 02_BaoCao/   2026-11/ …
+└─ 99_SaoLuu/   SaoLuu_QuanLyHopDong_2026-11-13.json</pre>
+</section>
+
+<section id="pA">
+  <h2>A. Tiếp nhận hợp đồng mới</h2>
+  <p class="sub">Khi nào: mỗi khi phòng Hợp đồng chuyển sang một hợp đồng đã ký. Thời gian: khoảng 5–10 phút/hợp đồng.</p>
+  <div class="flow" id="flowA" data-label="Sơ đồ quy trình tiếp nhận hợp đồng"></div>
+  <div class="legend"><span><i style="background:#dbeafe;border-color:#3b82f6"></i>Việc của bạn</span><span><i style="background:#f1f5f9;border-color:#94a3b8"></i>Việc của bên khác / hệ thống tự làm</span><span><i style="background:#fef3c7;border-color:#f59e0b"></i>Điểm quyết định</span><span><i style="background:#dcfce7;border-color:#22c55e"></i>Bắt đầu / kết thúc</span></div>
+  <h3>Hướng dẫn từng bước</h3>
+  <table><tr><th>Bước</th><th>Ai</th><th>Làm gì cụ thể</th><th>Kiểm tra / kết quả</th></tr>
+  <tr><td class="s">A1</td><td class="w">Phòng Hợp đồng</td><td>Điền <b>Phiếu thông tin hợp đồng</b> (Mẫu 1, các ô màu vàng): số HĐ, nhà thầu, MST, ngày hiệu lực, bảo lãnh, bảng chức danh (mã, số lượng, đơn giá, số tháng). Gửi kèm PDF đã ký.</td><td>Nhận đủ 2 file: phiếu .xlsx + PDF</td></tr>
+  <tr><td class="s">A2</td><td class="w">Bạn</td><td>Nếu <b>chỉ có PDF / bản cứng</b>: scan thành PDF, bỏ vào thư mục và yêu cầu Claude “tạo file nhập hợp đồng”. Claude trả về 1 file <code>.json</code>.</td><td>Có file .json thay cho phiếu Excel</td></tr>
+  <tr><td class="s">A3</td><td class="w">Bạn</td><td>Lưu PDF vào <code>01_HopDong/[số HĐ]/</code>, đặt tên theo số HĐ. Mở phần mềm → <kbd>Nhập từ file</kbd> → kéo file phiếu (hoặc .json) vào ô nhập.</td><td>Màn hình hiện “Xem trước”</td></tr>
+  <tr><td class="s">A4</td><td class="w">Hệ thống</td><td>Tự đọc file; nhận diện hợp đồng mới/đã có, nhà thầu mới/đã có (theo MST); tính <b>ngày hết hạn từng chức danh</b>; liệt kê lỗi (đỏ) và cảnh báo (vàng).</td><td>—</td></tr>
+  <tr><td class="s">A5</td><td class="w">Bạn</td><td><b>So bản xem trước với hợp đồng đã ký</b>: số HĐ, ngày hiệu lực, từng dòng chức danh (số lượng, đơn giá, số tháng), giá trị, bảo lãnh. Nếu có lỗi đỏ hoặc sai so với bản ký → trả phiếu cho phòng Hợp đồng sửa, <b>không tự sửa số liệu hợp đồng</b>.</td><td>Số liệu khớp bản ký 100%</td></tr>
+  <tr><td class="s">A6</td><td class="w">Bạn</td><td>Bấm <kbd>Xác nhận nhập vào hệ thống</kbd>. Ở trang hợp đồng bấm <kbd>Sửa</kbd> để bổ sung: đường dẫn file PDF, người phụ trách, phòng ban.</td><td>Trang chi tiết hợp đồng hiện đủ thông tin</td></tr>
+  <tr><td class="s">A7</td><td class="w">Hệ thống</td><td>Tạo nhà thầu (nếu mới), hợp đồng, chức danh; từ đây tự cảnh báo hết hạn, bảo lãnh, mức thanh toán.</td><td>Hợp đồng xuất hiện ở <kbd>Hợp đồng</kbd> với trạng thái đúng</td></tr></table>
+  <div class="rule"><b>Chốt chặn:</b> hệ thống không cho nhập khi thiếu số hợp đồng, tên nhà thầu, ngày hiệu lực, hoặc chức danh thiếu số lượng/đơn giá/thời hạn. Số hợp đồng trùng sẽ được coi là <b>cập nhật</b> hợp đồng cũ — đọc kỹ nhãn “Hợp đồng ĐÃ CÓ → sẽ cập nhật” trước khi xác nhận.</div>
+</section>
+
+<section id="pB">
+  <h2>B. Thanh toán hằng tháng</h2>
+  <p class="sub">Khi nào: mỗi tháng một lần cho từng hợp đồng đang hiệu lực. Lặp lại đến khi hợp đồng hết hạn.</p>
+  <div class="flow" id="flowB" data-label="Sơ đồ quy trình thanh toán hằng tháng"></div>
+  <h3>Hướng dẫn từng bước</h3>
+  <table><tr><th>Bước</th><th>Ai</th><th>Làm gì cụ thể</th><th>Kiểm tra / kết quả</th></tr>
+  <tr><td class="s">B1</td><td class="w">Bạn</td><td>Ngày 1–2 hằng tháng: <kbd>Nhập từ file</kbd> → ở “Mẫu 2” chọn hợp đồng + kỳ (tháng vừa qua) → <kbd>Tải bảng kê cho kỳ này</kbd>. Gửi file cho nhà thầu. Làm cho từng hợp đồng đang hiệu lực.</td><td>File đã điền sẵn chức danh, đơn giá, số ngày còn hiệu lực. Chức danh đã hết hạn <b>không có</b> trong file.</td></tr>
+  <tr><td class="s">B2</td><td class="w">Nhà thầu</td><td>Điền ô vàng: số đề nghị, số hóa đơn, <b>số người thực tế</b>, <b>ngày công thực tế</b>. Nộp lại file + bộ hồ sơ giấy (đề nghị thanh toán, hóa đơn, bảng chấm công có xác nhận, biên bản nghiệm thu) trước hạn.</td><td>Nhận đủ file Excel + hồ sơ giấy/scan</td></tr>
+  <tr><td class="s">B3</td><td class="w">Bạn</td><td>Lưu hồ sơ vào <code>ThanhToan/[kỳ]/</code>. Mở <kbd>Nhập từ file</kbd> → kéo file bảng kê vào.</td><td>Hiện bảng “Đối chiếu hồ sơ thanh toán”</td></tr>
+  <tr><td class="s">B4</td><td class="w">Hệ thống</td><td>Đối chiếu từng dòng với hợp đồng: đơn giá, số người ≤ số lượng HĐ, ngày công ≤ số ngày còn hiệu lực, thành tiền tính lại; kiểm tra trùng kỳ, lũy kế vượt giá trị HĐ, thiếu số hóa đơn.</td><td>Mỗi dòng: <b>Khớp</b> hoặc <b>Lệch</b> + lý do</td></tr>
+  <tr><td class="s">B5</td><td class="w">Bạn</td><td><b>Nếu có Lệch:</b> bấm <kbd>Xuất phiếu sai lệch</kbd>, gửi nhà thầu yêu cầu sửa và nộp lại (quay về B2). Chỉ dùng <kbd>Mở để chỉnh tay rồi ghi nhận</kbd> khi đã có giải trình bằng văn bản; ghi lý do vào ô Ghi chú.</td><td>Không còn dòng Lệch chưa giải trình</td></tr>
+  <tr><td class="s">B6</td><td class="w">Bạn</td><td><b>Kiểm tra hồ sơ giấy</b> và tích đủ 4 mục: hóa đơn hợp lệ, đúng số tiền; bảng chấm công có xác nhận của bộ phận sử dụng; biên bản nghiệm thu đủ chữ ký; đề nghị thanh toán có ký, đóng dấu. Số tiền trên hóa đơn phải bằng cột “Hệ thống tính”.</td><td>Đủ 4 dấu tích</td></tr>
+  <tr><td class="s">B7</td><td class="w">Bạn → Hệ thống</td><td>Bấm <kbd>Ghi nhận thanh toán</kbd>. Hệ thống lưu kỳ này ở trạng thái <b>Chờ thanh toán</b>, cập nhật lũy kế và % thực hiện.</td><td>Kỳ mới xuất hiện trong “Lịch sử thanh toán”</td></tr>
+  <tr><td class="s">B8</td><td class="w">Bạn</td><td><kbd>Báo cáo</kbd> → <b>1. Bảng kê thanh toán tháng</b> → chọn kỳ → <kbd>Xuất Excel</kbd>. In, ký “Người lập”, trình kèm hồ sơ.</td><td>File <code>BangKe_ThanhToan_[kỳ].xlsx</code> lưu vào <code>02_BaoCao</code></td></tr>
+  <tr><td class="s">B9</td><td class="w">Kế toán / Người duyệt</td><td>Kiểm tra, duyệt, chuyển tiền cho nhà thầu.</td><td>Có ủy nhiệm chi / xác nhận đã trả</td></tr>
+  <tr><td class="s">B10</td><td class="w">Bạn</td><td><kbd>Thanh toán</kbd> → lọc “Chờ thanh toán” → <kbd>Sửa</kbd> → nhập <b>Ngày thanh toán</b> → Lưu.</td><td>Trạng thái đổi thành <b>Đã thanh toán</b>; cảnh báo “đã đề nghị nhưng chưa trả” biến mất</td></tr></table>
+  <div class="rule"><b>Chốt chặn chống trả sai:</b> chức danh hết hạn → ngày hiệu lực = 0, thành tiền = 0. Tháng cuối của chức danh → chỉ tính số ngày còn hiệu lực. Trùng kỳ, vượt số người, vượt giá trị hợp đồng → báo đỏ.</div>
+  <div class="tip"><b>Công thức:</b> Thành tiền = Số người × Đơn giá tháng × Ngày công ÷ Số ngày của tháng. Nếu các nhân sự cùng chức danh có số ngày khác nhau, nhà thầu chèn thêm dòng cùng mã vị trí (ví dụ 3 người × 30 ngày và 1 người × 12 ngày).</div>
+</section>
+
+<section id="pC">
+  <h2>C. Theo dõi cảnh báo (thứ Hai hằng tuần)</h2>
+  <p class="sub">Mở phần mềm → <kbd>Tổng quan</kbd> → đọc “Việc cần xử lý” từ trên xuống. Bấm vào từng dòng để mở hợp đồng.</p>
+  <table><tr><th>Cảnh báo</th><th>Ý nghĩa</th><th>Việc phải làm</th><th>Phối hợp với</th></tr>
+  <tr><td>HĐ hết hạn trong 90 / 60 / 30 ngày</td><td>Sắp hết thời hạn hợp đồng</td><td>≥60 ngày: hỏi bộ phận sử dụng có tiếp tục không. ≤60 ngày: đề nghị làm phụ lục gia hạn hoặc lựa chọn nhà thầu mới. ≤30 ngày: báo cáo lãnh đạo nếu chưa có phương án.</td><td>Bộ phận sử dụng, phòng Hợp đồng</td></tr>
+  <tr><td>Chức danh hết hạn trong 30 ngày</td><td>Một vị trí hết hạn trước hợp đồng</td><td>Báo nhà thầu và bộ phận sử dụng ngày dừng. Kỳ thanh toán cuối chỉ tính đến ngày hết hạn.</td><td>Nhà thầu, bộ phận sử dụng</td></tr>
+  <tr><td>Đã hết hạn nhưng chưa thanh lý</td><td>Hợp đồng treo</td><td>Thực hiện quy trình F.</td><td>Phòng Hợp đồng, kế toán</td></tr>
+  <tr><td>Bảo lãnh sắp/đã hết hạn, hoặc hết trước HĐ</td><td>Rủi ro mất bảo đảm</td><td>Yêu cầu nhà thầu gia hạn bảo lãnh; nhận thư bảo lãnh mới → <kbd>Sửa</kbd> hợp đồng, cập nhật ngày.</td><td>Nhà thầu, phòng Hợp đồng</td></tr>
+  <tr><td>Đã thanh toán/đề nghị 80% / 90% / vượt</td><td>Sắp hết hoặc vượt giá trị HĐ</td><td>So thời gian còn lại với giá trị còn lại. Nếu thiếu → đề nghị phụ lục bổ sung giá trị <b>trước</b> khi vượt. Vượt → dừng ghi nhận, báo cáo.</td><td>Phòng Hợp đồng, lãnh đạo</td></tr>
+  <tr><td>Chưa ghi nhận thanh toán kỳ trước</td><td>Nhà thầu chưa nộp hoặc bạn chưa nhập</td><td>Nhắc nhà thầu nộp hồ sơ; hoặc thực hiện B3.</td><td>Nhà thầu</td></tr>
+  <tr><td>Đã đề nghị nhưng chưa thanh toán</td><td>Hồ sơ đang ở kế toán</td><td>Hỏi kế toán; khi đã trả → làm B10.</td><td>Kế toán</td></tr></table>
+</section>
+
+<section id="pD">
+  <h2>D. Phụ lục, gia hạn, điều chỉnh</h2>
+  <table><tr><th>Bước</th><th>Làm gì cụ thể</th><th>Kết quả</th></tr>
+  <tr><td class="s">D1</td><td>Phòng Hợp đồng gửi <b>phiếu Mẫu 1</b> cho phụ lục: ghi đúng số hợp đồng gốc, điền “Số phụ lục”, “Ngày ký phụ lục”, “Nội dung phụ lục”, và chỉ các chức danh có thay đổi (giữ nguyên mã vị trí).</td><td>Phiếu phụ lục + PDF phụ lục</td></tr>
+  <tr><td class="s">D2</td><td>Kéo phiếu vào <kbd>Nhập từ file</kbd>. Bản xem trước ghi “Hợp đồng ĐÃ CÓ → sẽ cập nhật”; mỗi chức danh ghi rõ <b>Cập nhật</b> hay <b>Thêm mới</b>.</td><td>Thấy đúng các dòng thay đổi</td></tr>
+  <tr><td class="s">D3</td><td>So với phụ lục đã ký → <kbd>Xác nhận</kbd>. Hệ thống cập nhật chức danh và ghi phụ lục vào mục “Phụ lục / điều chỉnh”.</td><td>Ngày hết hạn, giá trị được tính lại</td></tr>
+  <tr><td class="s">D4</td><td>Kiểm tra lại: ngày hết hạn mới, giá trị hợp đồng (nếu nhập tay thì <kbd>Sửa</kbd> lại), ngày bảo lãnh có phủ thời hạn mới không.</td><td>Cảnh báo cũ biến mất</td></tr></table>
+  <div class="tip"><b>Lưu ý khi đổi đơn giá giữa chừng:</b> các kỳ đã ghi nhận giữ nguyên đơn giá cũ. Đơn giá mới chỉ áp dụng cho bảng kê tải sau khi nhập phụ lục. Nếu đơn giá đổi giữa tháng, tạo chức danh mới (mã mới, ngày bắt đầu = ngày áp dụng) và sửa thời hạn chức danh cũ cho kết thúc vào ngày trước đó.</div>
+</section>
+
+<section id="pE">
+  <h2>E. Báo cáo định kỳ</h2>
+  <p class="sub">Mục <kbd>Báo cáo</kbd> → chọn loại → <kbd>Xuất Excel</kbd>. Lưu vào <code>02_BaoCao/[kỳ]/</code>.</p>
+  <table><tr><th>Báo cáo</th><th>Khi nào</th><th>Gửi cho</th><th>Dùng để</th></tr>
+  <tr><td>1. Bảng kê thanh toán tháng</td><td>Hằng tháng, sau bước B7</td><td>Kế toán, người duyệt</td><td>Trình duyệt thanh toán (có chỗ ký)</td></tr>
+  <tr><td>2. Hợp đồng &amp; chức danh sắp hết hạn</td><td>Ngày làm việc đầu tháng</td><td>Trưởng phòng, phòng Hợp đồng, bộ phận sử dụng</td><td>Lập kế hoạch gia hạn / chọn nhà thầu</td></tr>
+  <tr><td>3. Tình hình thực hiện hợp đồng</td><td>Hằng quý</td><td>Lãnh đạo</td><td>Giá trị, đã trả, còn lại, % thực hiện</td></tr>
+  <tr><td>4. Tổng hợp theo nhà thầu</td><td>Hằng quý / năm</td><td>Lãnh đạo, mua sắm</td><td>Đánh giá nhà thầu</td></tr>
+  <tr><td>5. Sổ theo dõi hợp đồng (đầy đủ)</td><td>Cuối quý, cuối năm, khi kiểm toán</td><td>Lưu trữ, kiểm toán</td><td>Toàn bộ dữ liệu, mỗi loại một sheet</td></tr>
+  <tr><td>6. Nhật ký thay đổi</td><td>Khi cần truy vết</td><td>Kiểm soát nội bộ</td><td>Ai thêm/sửa/xóa gì, khi nào</td></tr>
+  <tr><td>Xuất Excel từng hợp đồng</td><td>Khi được hỏi về một hợp đồng; khi thanh lý</td><td>Người hỏi; hồ sơ thanh lý</td><td>Chức danh + lịch sử thanh toán của 1 HĐ</td></tr></table>
+</section>
+
+<section id="pF">
+  <h2>F. Hết hạn và thanh lý</h2>
+  <table><tr><th>Bước</th><th>Làm gì cụ thể</th><th>Kết quả</th></tr>
+  <tr><td class="s">F1</td><td>Xác nhận với bộ phận sử dụng: nhân sự đã dừng đúng ngày hết hạn, không phát sinh sau hạn.</td><td>Không còn kỳ nào chưa nộp</td></tr>
+  <tr><td class="s">F2</td><td>Hoàn tất kỳ thanh toán cuối theo quy trình B (kỳ cuối thường tính theo tỷ lệ ngày).</td><td>Không còn kỳ “Chờ thanh toán”</td></tr>
+  <tr><td class="s">F3</td><td>Mở hợp đồng → <kbd>Xuất Excel HĐ này</kbd>. Đối chiếu tổng đã thanh toán với kế toán và nhà thầu (biên bản đối chiếu công nợ).</td><td>3 bên khớp số</td></tr>
+  <tr><td class="s">F4</td><td>Phòng Hợp đồng lập biên bản thanh lý. Lưu PDF vào thư mục hợp đồng.</td><td>Biên bản thanh lý đã ký</td></tr>
+  <tr><td class="s">F5</td><td>Mở hợp đồng → <kbd>Sửa</kbd> → Tình trạng = <b>Đã thanh lý</b>; ghi số biên bản thanh lý vào Ghi chú. Làm thủ tục hoàn trả bảo lãnh nếu có.</td><td>Hợp đồng rời khỏi danh sách cảnh báo</td></tr>
+  <tr><td class="s">F6</td><td>Cập nhật <b>đánh giá nhà thầu</b>: <kbd>Nhà thầu</kbd> → chọn → <kbd>Sửa</kbd> → Đánh giá.</td><td>Có dữ liệu cho lần lựa chọn sau</td></tr></table>
+</section>
+
+<section id="pG">
+  <h2>G. Sao lưu và an toàn dữ liệu</h2>
+  <ul>
+    <li><b>Thứ Sáu hằng tuần</b> và sau mỗi đợt nhập nhiều: <kbd>Cài đặt &amp; Sao lưu</kbd> → <kbd>Sao lưu (.json)</kbd> → lưu vào <code>99_SaoLuu</code> trên OneDrive. Giữ ít nhất 8 bản gần nhất.</li>
+    <li>Khi <b>dùng chung</b> (mục H): dữ liệu nằm trong thư mục OneDrive và được sao lưu tự động mỗi ngày vào <code>DuLieu/SaoLuu</code>; bản sao lưu thủ công hằng tuần vẫn nên làm.</li>
+    <li>Khi <b>chưa dùng chung</b>: dữ liệu nằm trong trình duyệt của máy này. <b>Không</b> xóa “dữ liệu trang web / cookie” của trình duyệt khi chưa sao lưu. Luôn dùng cùng một trình duyệt (Chrome hoặc Edge).</li>
+    <li>Đổi máy hoặc cài lại: mở phần mềm trên máy mới → <kbd>Khôi phục từ file</kbd> → chọn bản sao lưu mới nhất.</li>
+    <li>Nhập nhầm: sửa/xóa ngay tại chỗ (mọi thao tác được ghi vào Nhật ký). Nhầm nhiều: khôi phục bản sao lưu gần nhất rồi nhập lại phần sau đó.</li>
+  </ul>
+</section>
+
+<section id="pH">
+  <h2>H. Nhiều người dùng chung dữ liệu (qua thư mục OneDrive)</h2>
+  <p class="sub">Dữ liệu chung nằm trong file <code>du-lieu-hop-dong.json</code> ở một thư mục OneDrive/SharePoint được chia sẻ. Mỗi máy kết nối tới thư mục đó; phần mềm tự lưu và tự cập nhật.</p>
+  <h3>Cài đặt lần đầu</h3>
+  <table><tr><th>Bước</th><th>Ai</th><th>Làm gì cụ thể</th></tr>
+  <tr><td class="s">H1</td><td class="w">Người quản lý</td><td>Tạo thư mục <code>QuanLyHopDong</code> trên OneDrive/SharePoint gồm: file phần mềm, tài liệu này và thư mục con <code>DuLieu</code>. Chia sẻ quyền <b>chỉnh sửa</b> cho những người cùng dùng (chỉ cấp cho người cần nhập liệu).</td></tr>
+  <tr><td class="s">H2</td><td class="w">Mỗi người</td><td>Đồng bộ thư mục về máy bằng ứng dụng OneDrive (với thư mục được chia sẻ: “Thêm lối tắt vào Tệp của tôi”). Bấm chuột phải vào thư mục → <b>Luôn giữ trên thiết bị này</b>.</td></tr>
+  <tr><td class="s">H3</td><td class="w">Người quản lý (máy đầu tiên)</td><td>Mở phần mềm bằng Chrome/Edge → <kbd>Cài đặt &amp; Sao lưu</kbd> → nhập <b>Tên của bạn</b> → <kbd>Chọn thư mục dữ liệu chung</kbd> → chọn thư mục <code>DuLieu</code> → đồng ý “đưa dữ liệu trên máy này lên làm dữ liệu chung”.</td></tr>
+  <tr><td class="s">H4</td><td class="w">Những người còn lại</td><td>Chờ OneDrive đồng bộ xong file dữ liệu, rồi làm như H3 và chọn <b>“Dùng dữ liệu chung này”</b>.</td></tr>
+  <tr><td class="s">H5</td><td class="w">Mỗi người, mỗi lần mở trình duyệt</td><td>Nhìn nút ở góc trên phải: <b>xanh “● Dữ liệu chung · giờ”</b> là đang dùng chung. Nếu <b>vàng</b>, bấm vào nút để cấp quyền lại. Nếu <b>xám “Chỉ lưu trên máy này”</b> thì máy này chưa kết nối.</td></tr></table>
+  <h3>Quy tắc làm việc chung</h3>
+  <ul>
+    <li><b>Phân công rõ:</b> mỗi hợp đồng có một người phụ trách nhập liệu. Hai người không sửa cùng một hợp đồng hoặc cùng một kỳ thanh toán trong cùng lúc — nếu trùng, <b>bản lưu sau sẽ thay bản lưu trước</b> của riêng bản ghi đó. Các hợp đồng khác không bị ảnh hưởng.</li>
+    <li><b>Chờ đồng bộ:</b> thay đổi của người khác thường xuất hiện trong khoảng 1 phút (tùy OneDrive). Trước khi trình báo cáo, bấm nút đồng bộ ở góc trên và kiểm tra biểu tượng OneDrive đã đồng bộ xong.</li>
+    <li><b>Không mở/sửa file</b> <code>du-lieu-hop-dong.json</code> bằng tay. Nếu OneDrive tạo bản xung đột (tên có thêm tên máy), phần mềm tự gộp và xóa bản đó ở lần đồng bộ kế tiếp.</li>
+    <li><b>Cảnh báo “nhập TRÙNG số hợp đồng”</b> trên Tổng quan nghĩa là hai người đã cùng nhập một hợp đồng — giữ một bản, xóa bản kia.</li>
+    <li><b>Truy vết:</b> mọi thao tác ghi tên người làm trong báo cáo <b>6. Nhật ký thay đổi</b>; trang hợp đồng hiện “Sửa lần cuối” bởi ai.</li>
+    <li><b>Sao lưu tự động:</b> mỗi ngày phần mềm lưu một bản vào <code>DuLieu/SaoLuu/saoluu-[ngày].json</code>. Khôi phục: <kbd>Khôi phục từ file</kbd> — thao tác này áp dụng cho <b>tất cả</b> mọi người, chỉ người quản lý thực hiện.</li>
+    <li><b>Việc chỉ người quản lý làm:</b> xóa hợp đồng, khôi phục, “Xóa toàn bộ”, đổi ngưỡng cảnh báo.</li>
+  </ul>
+  <div class="rule"><b>Giới hạn cần biết:</b> đây là dùng chung qua file đồng bộ, phù hợp nhóm nhỏ (khoảng 2–5 người) không nhập cùng một bản ghi cùng lúc. Mọi người có quyền sửa thư mục đều sửa được toàn bộ dữ liệu — không phân quyền theo từng chức năng. Nếu cần phân quyền chặt hoặc nhiều người nhập đồng thời, nên chuyển sang SharePoint List hoặc cơ sở dữ liệu (cần hỗ trợ của IT).</div>
+</section>
+
+<section id="lich">
+  <h2>Lịch công việc — để không sót</h2>
+  <div class="cal">
+    <div><b>Khi có hợp đồng / phụ lục mới</b><ul><li>Quy trình A hoặc D trong 2 ngày làm việc</li><li>Lưu PDF, dán link</li></ul></div>
+    <div><b>Hằng tuần</b><ul><li>Thứ Hai: xem <kbd>Tổng quan</kbd>, xử lý cảnh báo (C)</li><li>Thứ Sáu: <kbd>Sao lưu</kbd> (G)</li></ul></div>
+    <div><b>Hằng tháng</b><ul><li>Ngày 1–2: gửi bảng kê Mẫu 2 cho nhà thầu (B1)</li><li>Ngày 5: hạn nhà thầu nộp hồ sơ (B2)</li><li>Ngày 5–10: đối chiếu, ghi nhận, trình duyệt (B3–B8)</li><li>Sau khi trả: nhập ngày thanh toán (B10)</li><li>Xuất báo cáo 1 và 2</li></ul></div>
+    <div><b>Hằng quý / năm</b><ul><li>Xuất báo cáo 3, 4, 5</li><li>Đối chiếu lũy kế với kế toán</li><li>Rà soát đánh giá nhà thầu</li><li>Chép bản sao lưu cuối quý ra nơi lưu thứ hai</li></ul></div>
+  </div>
+</section>
+
+<section id="xl">
+  <h2>Xử lý tình huống thường gặp</h2>
+  <table><tr><th>Tình huống</th><th>Cách xử lý</th></tr>
+  <tr><td>Phòng Hợp đồng chỉ gửi PDF hoặc bản cứng</td><td>Scan (nếu bản cứng) → đưa PDF cho Claude, yêu cầu “tạo file nhập hợp đồng .json” → kéo file .json vào <kbd>Nhập từ file</kbd> → so kỹ với bản ký (bản scan dễ sai số tiền, ngày tháng).</td></tr>
+  <tr><td>Phần mềm báo “Không nhận ra loại file”</td><td>File không theo mẫu hoặc bị đổi tên sheet. Yêu cầu bên gửi dùng lại đúng file mẫu.</td></tr>
+  <tr><td>Bảng kê báo “Không tìm thấy hợp đồng”</td><td>Hợp đồng chưa nhập (làm quy trình A trước) hoặc nhà thầu ghi sai số hợp đồng.</td></tr>
+  <tr><td>Nhà thầu nộp bảng theo mẫu riêng của họ</td><td>Trả lại, yêu cầu dùng Mẫu 2. Trường hợp gấp: <kbd>Thanh toán</kbd> → <kbd>+ Ghi nhận thanh toán</kbd> và nhập tay số người, ngày công — hệ thống vẫn cảnh báo vượt hạn/vượt số lượng.</td></tr>
+  <tr><td>Hóa đơn khác số tiền hệ thống tính</td><td>Không ghi nhận. Xuất phiếu sai lệch, yêu cầu nhà thầu điều chỉnh bảng kê hoặc hóa đơn.</td></tr>
+  <tr><td>Nhà thầu đề nghị thanh toán cho chức danh đã hết hạn</td><td>Hệ thống báo Lệch “không còn hiệu lực”. Chỉ thanh toán khi có phụ lục gia hạn đã ký và đã nhập (quy trình D).</td></tr>
+  <tr><td>Một kỳ bị nhập 2 lần</td><td>Hệ thống báo đỏ “nghi trùng hồ sơ”. Nếu đã lỡ ghi: <kbd>Thanh toán</kbd> → lọc theo hợp đồng và kỳ → <kbd>Xóa</kbd> bản trùng.</td></tr>
+  <tr><td>Thanh toán bổ sung / truy thu cho kỳ cũ</td><td>Ghi nhận thêm một dòng cho kỳ đó bằng nhập tay, ghi rõ “bổ sung” ở Ghi chú; chấp nhận cảnh báo trùng kỳ sau khi kiểm tra.</td></tr>
+  <tr><td>Muốn xem tình trạng tại một ngày khác (quá khứ / tương lai)</td><td>Đổi ô <kbd>Ngày xem</kbd> ở góc trên — mọi trạng thái, số ngày còn lại và báo cáo tính theo ngày đó.</td></tr></table>
+</section>
+</main>
+
+<script>
+function flow(el,lanes,nodes,edges){
+  const LW=252,RH=98,BW=178,BH=60,TOP=38,PX=14,DH=38;
+  const rows=Math.max(...nodes.map(n=>n.r))+1,W=PX*2+LW*lanes.length,H=TOP+rows*RH+8;
+  const cx=n=>PX+LW*n.l+LW/2,cy=n=>TOP+RH*n.r+RH/2,hh=n=>n.t==='dec'?DH:n.t==='se'?22:BH/2,hw=()=>BW/2;
+  const N=Object.fromEntries(nodes.map(n=>[n.id,n]));
+  const C={me:['#dbeafe','#3b82f6'],ot:['#f1f5f9','#94a3b8'],dec:['#fef3c7','#f59e0b'],se:['#dcfce7','#22c55e']};
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;font-family:Segoe UI,system-ui,sans-serif" role="img" aria-label="${el.dataset.label}">
+  <defs><marker id="ar-${el.id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker></defs>`;
+  lanes.forEach((t,i)=>{s+=`<rect x="${PX+LW*i}" y="0" width="${LW}" height="${H}" fill="${i%2?'#ffffff':'#f8fafc'}" stroke="#e2e8f0"/><rect x="${PX+LW*i}" y="0" width="${LW}" height="28" fill="#1e3a8a"/><text x="${PX+LW*i+LW/2}" y="19" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">${t}</text>`});
+  const lab=(x,y,t,anchor='start')=>t?`<text x="${x}" y="${y}" font-size="11.5" font-weight="600" fill="#b45309" text-anchor="${anchor}" stroke="#fff" stroke-width="4" paint-order="stroke">${t}</text>`:'';
+  edges.forEach(e=>{const a=N[e.a],b=N[e.b],ax=cx(a),ay=cy(a),bx=cx(b),by=cy(b);let d,l='';
+    if(e.back){const sd=e.back==='L'?-1:1,xs=sd<0?Math.min(ax,bx)-hw()-11:Math.max(ax,bx)+hw()+11;d=`M${ax+sd*hw()},${ay} H${xs} V${by} H${bx+sd*hw()}`;l=lab(xs+sd*-4,(ay+by)/2,e.label,sd<0?'start':'end')}
+    else if(a.r===b.r){const dr=bx>ax?1:-1;d=`M${ax+dr*hw()},${ay} H${bx-dr*hw()}`;l=lab((ax+bx)/2,ay-7,e.label,'middle')}
+    else if(a.l===b.l){d=`M${ax},${ay+hh(a)} V${by-hh(b)}`;l=lab(ax-7,ay+hh(a)+13,e.label,'end')}
+    else{const my=TOP+RH*(a.r+1);d=`M${ax},${ay+hh(a)} V${my} H${bx} V${by-hh(b)}`;l=lab(ax+7,ay+hh(a)+13,e.label)}
+    s+=`<path d="${d}" fill="none" stroke="#475569" stroke-width="1.6" ${e.back?'stroke-dasharray="5 4"':''} marker-end="url(#ar-${el.id})"/>${l}`});
+  nodes.forEach(n=>{const x=cx(n),y=cy(n),[f,st]=C[n.t==='dec'?'dec':n.t==='se'?'se':n.who||'ot'];
+    if(n.t==='dec')s+=`<polygon points="${x},${y-DH} ${x+hw()},${y} ${x},${y+DH} ${x-hw()},${y}" fill="${f}" stroke="${st}" stroke-width="1.6"/>`;
+    else if(n.t==='se')s+=`<rect x="${x-hw()+14}" y="${y-22}" width="${BW-28}" height="44" rx="22" fill="${f}" stroke="${st}" stroke-width="1.6"/>`;
+    else s+=`<rect x="${x-hw()}" y="${y-BH/2}" width="${BW}" height="${BH}" rx="7" fill="${f}" stroke="${st}" stroke-width="1.6"/>`;
+    const L=n.text,lh=14.5,y0=y-(L.length-1)*lh/2+4;
+    L.forEach((t,i)=>s+=`<text x="${x}" y="${y0+i*lh}" text-anchor="middle" font-size="12" fill="#0f172a" ${i===0&&n.t!=='dec'&&n.t!=='se'&&L.length>1?'':''}>${t}</text>`);
+    if(n.tag)s+=`<rect x="${x-hw()-2}" y="${y-(n.t==='dec'?DH:BH/2)-9}" width="32" height="18" rx="9" fill="#1e40af"/><text x="${x-hw()+14}" y="${y-(n.t==='dec'?DH:BH/2)+4}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">${n.tag}</text>`});
+  el.innerHTML=s+'</svg>';
+}
+flow(document.getElementById('flowA'),['Phòng Hợp đồng','Bạn (quản lý hợp đồng)','Hệ thống / Claude'],[
+  {id:'s',l:0,r:0,t:'se',text:['Hợp đồng đã ký']},
+  {id:'a1',l:0,r:1,tag:'A1',text:['Điền Phiếu thông tin HĐ','(Mẫu 1) + gửi PDF đã ký']},
+  {id:'d1',l:1,r:2,t:'dec',text:['Có phiếu','Excel theo mẫu?']},
+  {id:'a2',l:2,r:2,tag:'A2',text:['Đưa PDF cho Claude','→ tạo file nhập .json']},
+  {id:'a3',l:1,r:3,who:'me',tag:'A3',text:['Lưu PDF vào thư mục HĐ','Kéo file vào “Nhập từ file”']},
+  {id:'a4',l:2,r:4,tag:'A4',text:['Đọc file, tính ngày hết hạn','Hiện xem trước + lỗi']},
+  {id:'d2',l:1,r:5,t:'dec',text:['Khớp với','bản đã ký?']},
+  {id:'ax',l:0,r:5,text:['Nhận lại phiếu,','sửa và gửi lại']},
+  {id:'a6',l:1,r:6,who:'me',tag:'A6',text:['Bấm Xác nhận nhập','Bổ sung link PDF, phụ trách']},
+  {id:'a7',l:2,r:7,tag:'A7',text:['Tạo nhà thầu, HĐ, chức danh','Bật cảnh báo tự động']},
+  {id:'e',l:2,r:8,t:'se',text:['HĐ đang được theo dõi']}
+],[{a:'s',b:'a1'},{a:'a1',b:'d1'},{a:'d1',b:'a2',label:'Không'},{a:'d1',b:'a3',label:'Có'},{a:'a2',b:'a3'},{a:'a3',b:'a4'},{a:'a4',b:'d2'},
+  {a:'d2',b:'ax',label:'Sai'},{a:'ax',b:'a1',back:'L',label:''},{a:'d2',b:'a6',label:'Khớp'},{a:'a6',b:'a7'},{a:'a7',b:'e'}]);
+flow(document.getElementById('flowB'),['Nhà thầu','Bạn (quản lý hợp đồng)','Hệ thống','Kế toán / Người duyệt'],[
+  {id:'s',l:1,r:0,t:'se',text:['Đầu tháng']},
+  {id:'b1',l:1,r:1,who:'me',tag:'B1',text:['Tải bảng kê (Mẫu 2)','từng HĐ, gửi nhà thầu']},
+  {id:'b2',l:0,r:2,tag:'B2',text:['Điền số người, ngày công','Nộp file + hồ sơ giấy']},
+  {id:'b3',l:1,r:3,who:'me',tag:'B3',text:['Lưu hồ sơ. Kéo bảng kê','vào “Nhập từ file”']},
+  {id:'b4',l:2,r:4,tag:'B4',text:['Đối chiếu từng dòng','với HĐ: Khớp / Lệch']},
+  {id:'d1',l:1,r:5,t:'dec',tag:'B5',text:['Khớp','toàn bộ?']},
+  {id:'bx',l:0,r:5,text:['Nhận phiếu sai lệch,','sửa và nộp lại']},
+  {id:'b6',l:1,r:6,who:'me',tag:'B6',text:['Kiểm tra hồ sơ giấy','(tích đủ 4 mục)']},
+  {id:'b7',l:2,r:7,tag:'B7',text:['Ghi nhận “Chờ thanh toán”','Cập nhật lũy kế, %']},
+  {id:'b8',l:1,r:8,who:'me',tag:'B8',text:['Xuất Bảng kê thanh toán','tháng (Excel), trình ký']},
+  {id:'b9',l:3,r:9,tag:'B9',text:['Duyệt và chuyển tiền','cho nhà thầu']},
+  {id:'b10',l:1,r:10,who:'me',tag:'B10',text:['Nhập ngày thanh toán','→ “Đã thanh toán”']},
+  {id:'e',l:1,r:11,t:'se',text:['Xong kỳ · lặp tháng sau']}
+],[{a:'s',b:'b1'},{a:'b1',b:'b2'},{a:'b2',b:'b3'},{a:'b3',b:'b4'},{a:'b4',b:'d1'},{a:'d1',b:'bx',label:'Lệch'},{a:'bx',b:'b2',back:'L'},{a:'d1',b:'b6',label:'Khớp'},
+  {a:'b6',b:'b7'},{a:'b7',b:'b8'},{a:'b8',b:'b9'},{a:'b9',b:'b10'},{a:'b10',b:'e'}]);
+</script>
+</body>
+</html>
