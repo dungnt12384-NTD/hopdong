@@ -6,6 +6,10 @@
 <title>Quản lý Hợp đồng</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://accounts.google.com; connect-src 'self' https://www.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com; img-src 'self' data: blob: https://*.googleusercontent.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="theme-color" content="#1e3a8a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hợp đồng">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="referrer" content="no-referrer">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
@@ -90,6 +94,11 @@ a{color:#1d4ed8}
 ol.steps{margin:6px 0 0;padding-left:20px}ol.steps li{margin-bottom:4px}
 @media(max-width:640px){.fgrid{grid-template-columns:1fr}}
 .nofs .fsonly{display:none!important}
+tr.click:focus-visible,.alerts li:focus-visible{outline:2px solid var(--pri);outline-offset:-2px}
+@media(max-width:640px){input,select,textarea{font-size:16px}}   /* iPhone/iPad không tự phóng to khi bấm vào ô nhập */
+@media(pointer:coarse){button.sm{padding:7px 11px}nav button{padding:13px 14px}}   /* nút đủ lớn để chạm */
+@media print{header,nav,.back,.bar .right,button,#toast,#gate,.drop,dialog{display:none!important}
+  body{background:#fff}main{max-width:none;padding:0}.card{break-inside:avoid;border:1px solid #bbb}.tbl{overflow:visible}th,td{white-space:normal}a{color:inherit;text-decoration:none}}
 </style>
 </head>
 <body>
@@ -829,7 +838,7 @@ function vContract(){
   const kv=(k,v)=>`<div class="kv"><span>${k}</span><b>${v}</b></div>`;
   $('#view').innerHTML=`<button class="back" onclick="go('contracts')">← Danh sách hợp đồng</button>
   <div class="card"><div class="bar"><h2>${esc(c.no)} ${badge(st)}</h2><div class="right">
-    <button onclick="editContract('${c.id}')">Sửa</button><button onclick="dupContract('${c.id}')" title="Tạo hợp đồng mới từ hợp đồng này (gia hạn)">⎘ Nhân bản</button><button class="grn" onclick="repContract('${c.id}')">⬇ Xuất Excel HĐ này</button><button class="del" onclick="delContract('${c.id}')">Xóa</button></div></div>
+    <button onclick="editContract('${c.id}')">Sửa</button><button onclick="dupContract('${c.id}')" title="Tạo hợp đồng mới từ hợp đồng này (gia hạn)">⎘ Nhân bản</button><button class="grn" onclick="repContract('${c.id}')">⬇ Xuất Excel HĐ này</button><button onclick="window.print()" title="In trang này hoặc lưu thành PDF">🖨 In / PDF</button><button class="del" onclick="delContract('${c.id}')">Xóa</button></div></div>
     <div class="grid2">
       ${kv('Nhà thầu',`<a href="#" onclick="go('vendor','${v.id}');return false">${esc(v.name)}</a>`)}${kv('Loại hợp đồng',esc(c.type))}
       ${kv('Ngày ký',vn(c.signDate)||'—')}${kv('Hiệu lực → Hết hạn',`${vn(c.start)} → ${vn(end)}${c.end?'':' <span class="muted">(tự tính)</span>'}`)}
@@ -1350,6 +1359,10 @@ function vImport(){
 window.addEventListener('dragover',e=>e.preventDefault());window.addEventListener('drop',e=>e.preventDefault());
 
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+/* Dòng bảng / cảnh báo bấm được cũng thao tác được bằng bàn phím (Tab rồi Enter hoặc Space) */
+const mkFocus=()=>document.querySelectorAll('#view tr.click:not([tabindex]),#view .alerts li:not([tabindex])').forEach(e=>{e.tabIndex=0;e.setAttribute('role','link')});
+new MutationObserver(mkFocus).observe($('#view'),{childList:true,subtree:true});
+document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const t=e.target.closest&&e.target.closest('tr.click,.alerts li');if(t&&e.target===t){e.preventDefault();t.click()}});
 render();
 initShare();
 setInterval(()=>{if(DIR&&!document.hidden)syncNow()},20000);
