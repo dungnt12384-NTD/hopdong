@@ -1358,7 +1358,7 @@ function vImport(){
 }
 window.addEventListener('dragover',e=>e.preventDefault());window.addEventListener('drop',e=>e.preventDefault());
 
-if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(()=>{});
 /* Dòng bảng / cảnh báo bấm được cũng thao tác được bằng bàn phím (Tab rồi Enter hoặc Space) */
 const mkFocus=()=>document.querySelectorAll('#view tr.click:not([tabindex]),#view .alerts li:not([tabindex])').forEach(e=>{e.tabIndex=0;e.setAttribute('role','link')});
 new MutationObserver(mkFocus).observe($('#view'),{childList:true,subtree:true});
