@@ -213,7 +213,7 @@ async function crTryRemembered(hdr){try{const c=await idb('readonly',s=>s.get('c
 const gisReady=()=>!!(window.google&&google.accounts&&google.accounts.oauth2);
 function gInit(){if(GD.client)return true;if(!gisReady())return false;GD.client=google.accounts.oauth2.initTokenClient({client_id:GCFG.clientId,scope:GCFG.scope,callback:()=>{},error_callback:()=>{}});return true}
 function gRequest(prompt){return new Promise((res,rej)=>{if(!gInit())return rej(new Error('Chưa tải được thư viện đăng nhập Google (kiểm tra mạng)'));
-  GD.client.callback=r=>{if(r&&r.access_token){GD.tok=r.access_token;GD.exp=Date.now()+(+r.expires_in||3600)*1000;GD.lost=false;res(GD.tok)}else rej(new Error((r&&(r.error_description||r.error))||'Đăng nhập Google thất bại'))};
+  GD.client.callback=r=>{if(r&&r.access_token){GD.tok=r.access_token;GD.exp=Date.now()+(+r.expires_in||3600)*1000;GD.lost=false;try{sessionStorage.setItem('hd_tok',JSON.stringify({t:GD.tok,e:GD.exp}))}catch(e){}res(GD.tok)}else rej(new Error((r&&(r.error_description||r.error))||'Đăng nhập Google thất bại'))};
   GD.client.error_callback=e=>rej(new Error(e&&e.type==='popup_closed'?'Đã đóng cửa sổ đăng nhập Google':e&&e.type==='popup_failed_to_open'?'Trình duyệt đang chặn cửa sổ đăng nhập Google (cho phép cửa sổ bật lên rồi thử lại)':'Đăng nhập Google thất bại'));
   GD.client.requestAccessToken({prompt})})}
 function gSign(prompt){if(GD.busy)return GD.busy;GD.busy=gRequest(prompt||'').finally(()=>{GD.busy=null});return GD.busy}
@@ -295,6 +295,7 @@ async function lockApp(forget,msg){
 async function gSignOut(){
   if(DIR&&!confirm('Đăng xuất Google và xóa dữ liệu đang mở khỏi thiết bị này? (Dữ liệu trên Google Drive vẫn còn nguyên.)'))return;
   try{if(GD.tok&&gisReady())google.accounts.oauth2.revoke(GD.tok)}catch(e){}
+  try{sessionStorage.removeItem('hd_tok')}catch(e){}
   GD.tok='';GD.exp=0;GD.user='';GD.lost=false;GD.err='';GD.mode='';GD.state='signin';
   DIR=null;ROOT=null;LOADED=false;CR.pass='';CR.keys.clear();CR.on=false;CR.remember=false;CR.salt=null;S=blank();S.tomb={};snap();
   try{await idb('readwrite',s=>s.delete('ckey'))}catch(e){}
@@ -450,6 +451,9 @@ async function initShare(){
   GD.state=gisReady()?'signin':'nogis';
   setSync(GD.state==='nogis'?'na':'off');
   if(UI.page==='settings')render();
+  /* F5 / mở lại trong cùng tab: dùng lại phiên Google còn hạn (lưu trong sessionStorage, mất khi đóng tab) để khỏi phải bấm đăng nhập lại */
+  if(GD.state==='signin'){try{const s=JSON.parse(sessionStorage.getItem('hd_tok')||'null');
+    if(s&&s.t&&s.e>Date.now()+120000){GD.tok=s.t;GD.exp=s.e;gAfterAuth()}else sessionStorage.removeItem('hd_tok')}catch(e){}}
 }
 function syncClick(){
   if(!DIR)return gStart();

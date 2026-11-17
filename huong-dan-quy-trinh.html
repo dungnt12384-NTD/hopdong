@@ -48,7 +48,7 @@ ul{margin:6px 0;padding-left:20px}li{margin-bottom:3px}
   <p>Dùng kèm phần mềm “Quản lý Hợp đồng &amp; Nhà thầu” · Sơ đồ tổng quát và hướng dẫn từng bước</p>
 </header>
 <main>
-<div class="toolbar"><a href="quan-ly-hop-dong.html">← Mở phần mềm</a><button onclick="print()">🖨 In / Lưu PDF</button>
+<div class="toolbar"><a href="index.html">← Mở phần mềm</a><button onclick="print()">🖨 In / Lưu PDF</button>
   <a href="#p0">0. Thiết lập</a><a href="#pA">A. Tiếp nhận HĐ</a><a href="#pB">B. Thanh toán</a><a href="#pC">C. Theo dõi</a><a href="#pD">D. Phụ lục</a><a href="#pE">E. Báo cáo</a><a href="#pF">F. Thanh lý</a><a href="#pG">G. Sao lưu</a><a href="#pH">H. Dùng chung</a><a href="#lich">Lịch công việc</a><a href="#xl">Xử lý tình huống</a></div>
 
 <section>
@@ -64,7 +64,7 @@ ul{margin:6px 0;padding-left:20px}li{margin-bottom:3px}
   <div class="always">
     <a class="ph" href="#pC"><b>C. Theo dõi cảnh báo — hằng tuần</b><span>Mở “Tổng quan”, xử lý việc Khẩn → Cần chú ý → Lưu ý</span></a>
     <a class="ph" href="#pE"><b>E. Báo cáo — tháng / quý</b><span>Xuất Excel đã định dạng, gửi đúng người nhận</span></a>
-    <a class="ph" href="#pG"><b>G. Sao lưu — thứ Sáu hằng tuần</b><span>Tải file sao lưu, lưu vào OneDrive</span></a>
+    <a class="ph" href="#pG"><b>G. Sao lưu — thứ Sáu hằng tuần</b><span>Tải file sao lưu, cất ở nơi thứ hai</span></a>
   </div>
   <div class="tip"><b>3 nguyên tắc để không sót:</b> (1) Mọi dữ liệu vào hệ thống đều đi qua mục <kbd>Nhập từ file</kbd> hoặc form nhập — không ghi ngoài sổ. (2) Không thanh toán khi hệ thống còn báo <b>Lệch</b> mà chưa có giải trình. (3) Mỗi thứ Hai xem <kbd>Tổng quan</kbd>, mỗi thứ Sáu <kbd>Sao lưu</kbd>.</div>
 </section>
@@ -73,15 +73,13 @@ ul{margin:6px 0;padding-left:20px}li{margin-bottom:3px}
   <h2>0. Thiết lập ban đầu (làm một lần)</h2>
   <table><tr><th>Bước</th><th>Làm gì</th><th>Kết quả cần có</th></tr>
   <tr><td class="s">0.1</td><td>Thống nhất <b>quy ước mã</b>: nhà thầu <kbd>NT-001</kbd>, hợp đồng <kbd>HĐ-[loại]-[năm]-[số]</kbd> (ví dụ HĐ-MP-2026-001), chức danh <kbd>MP01</kbd>… Mã chức danh phải trùng với mã ghi trong hợp đồng/phụ lục giá.</td><td>Một trang quy ước gửi phòng Hợp đồng</td></tr>
-  <tr><td class="s">0.2</td><td>Tạo <b>cấu trúc thư mục</b> trên OneDrive (xem mẫu bên dưới). File PDF đặt tên trùng số hợp đồng.</td><td>Thư mục sẵn sàng</td></tr>
-  <tr><td class="s">0.3</td><td>Mở phần mềm → <kbd>Cài đặt &amp; Sao lưu</kbd> → <kbd>Xóa toàn bộ, bắt đầu nhập thật</kbd> (xóa dữ liệu mẫu). Đặt ngưỡng cảnh báo (mặc định 30 và 90 ngày).</td><td>Hệ thống trống, sẵn sàng</td></tr>
+  <tr><td class="s">0.2</td><td>Tạo <b>cấu trúc thư mục</b> để cất file PDF, Excel, báo cáo (xem mẫu bên dưới, đặt trên Google Drive hoặc ổ máy tính). File PDF đặt tên trùng số hợp đồng. <i>Đây chỉ là nơi cất tài liệu; dữ liệu của phần mềm nằm riêng trong thư mục <code>QuanLyHopDong</code> trên Google Drive (đã mã hóa), không chỉnh sửa tay.</i></td><td>Thư mục sẵn sàng</td></tr>
+  <tr><td class="s">0.3</td><td>Mở phần mềm (xem mục H: đăng nhập Google, đặt mật khẩu mã hóa) → <kbd>Cài đặt &amp; Sao lưu</kbd> → <kbd>Xóa toàn bộ, bắt đầu nhập thật</kbd> (xóa dữ liệu mẫu). Đặt ngưỡng cảnh báo (mặc định 30 và 90 ngày).</td><td>Hệ thống trống, sẵn sàng</td></tr>
   <tr><td class="s">0.4</td><td><kbd>Nhập từ file</kbd> → <kbd>Tải mẫu phiếu hợp đồng</kbd>. Gửi <b>Mẫu 1</b> cho phòng Hợp đồng kèm yêu cầu: mỗi hợp đồng/phụ lục gửi 1 phiếu Excel + PDF đã ký; không đổi tên sheet và cột A.</td><td>Phòng Hợp đồng đồng ý dùng mẫu</td></tr>
   <tr><td class="s">0.5</td><td>Thông báo cho <b>nhà thầu</b>: hằng tháng nộp bảng kê theo <b>Mẫu 2</b> do bạn gửi, hạn nộp cố định (ví dụ trước ngày 5), kèm hóa đơn, bảng chấm công có xác nhận, biên bản nghiệm thu.</td><td>Nhà thầu xác nhận</td></tr>
   <tr><td class="s">0.6</td><td>Nhập các <b>hợp đồng đang chạy</b> (theo quy trình A) và các kỳ đã thanh toán trước đó (mục <kbd>Thanh toán</kbd> → <kbd>+ Ghi nhận thanh toán</kbd>, nhập ngày thanh toán).</td><td>Lũy kế đã thanh toán đúng với sổ kế toán</td></tr>
   <tr><td class="s">0.7</td><td><kbd>Cài đặt &amp; Sao lưu</kbd> → <kbd>Sao lưu</kbd>, lưu file vào thư mục <code>99_SaoLuu</code>.</td><td>Có file sao lưu đầu tiên</td></tr></table>
 <pre>QuanLyHopDong/
-├─ quan-ly-hop-dong.html          ← phần mềm
-├─ huong-dan-quy-trinh.html       ← tài liệu này
 ├─ 01_HopDong/
 │   └─ HĐ-MP-2026-001/
 │       ├─ HĐ-MP-2026-001.pdf            (bản đã ký)
@@ -180,35 +178,35 @@ ul{margin:6px 0;padding-left:20px}li{margin-bottom:3px}
 <section id="pG">
   <h2>G. Sao lưu và an toàn dữ liệu</h2>
   <ul>
-    <li><b>Thứ Sáu hằng tuần</b> và sau mỗi đợt nhập nhiều: <kbd>Cài đặt &amp; Sao lưu</kbd> → <kbd>Sao lưu (.json)</kbd> → lưu vào <code>99_SaoLuu</code> trên OneDrive. Giữ ít nhất 8 bản gần nhất.</li>
-    <li>Khi <b>dùng chung</b> (mục H): dữ liệu nằm trong thư mục OneDrive và được sao lưu tự động mỗi ngày vào <code>DuLieu/SaoLuu</code>; bản sao lưu thủ công hằng tuần vẫn nên làm.</li>
-    <li>Khi <b>chưa dùng chung</b>: dữ liệu nằm trong trình duyệt của máy này. <b>Không</b> xóa “dữ liệu trang web / cookie” của trình duyệt khi chưa sao lưu. Luôn dùng cùng một trình duyệt (Chrome hoặc Edge).</li>
-    <li>Đổi máy hoặc cài lại: mở phần mềm trên máy mới → <kbd>Khôi phục từ file</kbd> → chọn bản sao lưu mới nhất.</li>
+    <li><b>Dữ liệu tự lưu ngay</b> lên Google Drive mỗi khi bạn thêm/sửa/xóa — không cần bấm nút lưu. Góc trên hiện “☁ Google Drive … · lưu hh:mm”. Nếu mất mạng, phần mềm báo lỗi và tự thử lại; đừng đóng trang cho tới khi báo đã lưu.</li>
+    <li><b>Sao lưu tự động:</b> <kbd>Cài đặt &amp; Sao lưu</kbd> → <kbd>Tự động sao lưu</kbd> (mặc định mỗi ngày; có thể chọn 15 phút … 1 tuần) → <kbd>Lưu lịch</kbd>. Mỗi bản là file mã hóa trong thư mục <code>QuanLyHopDong/SaoLuu</code> trên Drive. Chỉ chạy khi trang đang mở và chỉ khi dữ liệu có thay đổi. Lịch được nhớ riêng theo từng máy/trình duyệt. Nên đặt “Giữ tối đa” khoảng 30–60 bản.</li>
+    <li><b>Sao lưu thủ công (thứ Sáu hằng tuần):</b> <kbd>Sao lưu ngay</kbd>, sau đó <b>chép một bản ra nơi thứ hai</b> (USB, ổ máy tính hoặc tài khoản khác). File sao lưu vẫn được mã hóa — cần đúng mật khẩu mới mở được.</li>
+    <li><b>Mật khẩu mã hóa:</b> chỉ người dùng biết. <b>Quên mật khẩu = không khôi phục được dữ liệu</b> (kể cả bản sao lưu). Hãy ghi ở nơi an toàn, tách khỏi máy tính.</li>
+    <li>Đổi máy hoặc làm lại từ đầu: mở phần mềm trên máy mới → đăng nhập Google (cùng tài khoản) → nhập mật khẩu; dữ liệu tự hiện ra. Nếu dữ liệu bị hỏng: <kbd>Khôi phục từ file</kbd> → chọn bản sao lưu gần nhất.</li>
     <li>Nhập nhầm: sửa/xóa ngay tại chỗ (mọi thao tác được ghi vào Nhật ký). Nhầm nhiều: khôi phục bản sao lưu gần nhất rồi nhập lại phần sau đó.</li>
+    <li>Tự khóa sau 15 phút không thao tác (trừ máy đã chọn “Ghi nhớ trên thiết bị này” — chỉ nên chọn trên máy cá nhân).</li>
   </ul>
 </section>
 
 <section id="pH">
-  <h2>H. Nhiều người dùng chung dữ liệu (qua thư mục OneDrive)</h2>
-  <p class="sub">Dữ liệu chung nằm trong file <code>du-lieu-hop-dong.json</code> ở một thư mục OneDrive/SharePoint được chia sẻ. Mỗi máy kết nối tới thư mục đó; phần mềm tự lưu và tự cập nhật.</p>
-  <h3>Cài đặt lần đầu</h3>
-  <table><tr><th>Bước</th><th>Ai</th><th>Làm gì cụ thể</th></tr>
-  <tr><td class="s">H1</td><td class="w">Người quản lý</td><td>Tạo thư mục <code>QuanLyHopDong</code> trên OneDrive/SharePoint gồm: file phần mềm, tài liệu này và thư mục con <code>DuLieu</code>. Chia sẻ quyền <b>chỉnh sửa</b> cho những người cùng dùng (chỉ cấp cho người cần nhập liệu).</td></tr>
-  <tr><td class="s">H2</td><td class="w">Mỗi người</td><td>Đồng bộ thư mục về máy bằng ứng dụng OneDrive (với thư mục được chia sẻ: “Thêm lối tắt vào Tệp của tôi”). Bấm chuột phải vào thư mục → <b>Luôn giữ trên thiết bị này</b>.</td></tr>
-  <tr><td class="s">H3</td><td class="w">Người quản lý (máy đầu tiên)</td><td>Mở phần mềm bằng Chrome/Edge → <kbd>Cài đặt &amp; Sao lưu</kbd> → nhập <b>Tên của bạn</b> → <kbd>Chọn thư mục dữ liệu chung</kbd> → chọn thư mục <code>DuLieu</code> → đồng ý “đưa dữ liệu trên máy này lên làm dữ liệu chung”.</td></tr>
-  <tr><td class="s">H4</td><td class="w">Những người còn lại</td><td>Chờ OneDrive đồng bộ xong file dữ liệu, rồi làm như H3 và chọn <b>“Dùng dữ liệu chung này”</b>.</td></tr>
-  <tr><td class="s">H5</td><td class="w">Mỗi người, mỗi lần mở trình duyệt</td><td>Nhìn nút ở góc trên phải: <b>xanh “● Dữ liệu chung · giờ”</b> là đang dùng chung. Nếu <b>vàng</b>, bấm vào nút để cấp quyền lại. Nếu <b>xám “Chỉ lưu trên máy này”</b> thì máy này chưa kết nối.</td></tr></table>
-  <h3>Quy tắc làm việc chung</h3>
+  <h2>H. Dùng trên máy tính và điện thoại (Google Drive)</h2>
+  <p class="sub">Phần mềm chạy trên web, dữ liệu nằm trong Google Drive của <b>chính tài khoản đang đăng nhập</b>, mã hóa bằng mật khẩu riêng. Máy tính bàn, laptop và điện thoại cùng đăng nhập một tài khoản Google thì thấy cùng một dữ liệu.</p>
+  <h3>Lần đầu trên mỗi thiết bị</h3>
+  <table><tr><th>Bước</th><th>Làm gì cụ thể</th></tr>
+  <tr><td class="s">H1</td><td>Mở trình duyệt (Chrome/Edge/Safari) vào <b>https://dungnt12384-ntd.github.io/hopdong/</b>. Nên dùng một hồ sơ (profile) Chrome riêng cho tài khoản Google này.</td></tr>
+  <tr><td class="s">H2</td><td>Bấm <kbd>Đăng nhập Google</kbd>, chọn đúng tài khoản. Lần đầu Google báo “chưa xác minh ứng dụng”: bấm <kbd>Nâng cao</kbd> → <kbd>Tiếp tục</kbd>, rồi cho phép truy cập. Tài khoản phải được thêm vào danh sách người thử (Test users) của ứng dụng.</td></tr>
+  <tr><td class="s">H3</td><td><b>Lần đầu tiên trên tài khoản:</b> đặt mật khẩu mã hóa (hai lần). <b>Các lần sau / thiết bị khác:</b> nhập đúng mật khẩu đó. Có thể tick “Ghi nhớ” trên máy cá nhân.</td></tr>
+  <tr><td class="s">H4</td><td>Có dữ liệu cũ: <kbd>Cài đặt &amp; Sao lưu</kbd> → <kbd>Khôi phục từ file</kbd> → chọn file <code>.json</code> cũ.</td></tr>
+  <tr><td class="s">H5</td><td><b>Điện thoại:</b> menu trình duyệt → <kbd>Thêm vào Màn hình chính</kbd> (iPhone: Safari → Chia sẻ → <kbd>Thêm vào MH chính</kbd>) để mở như một ứng dụng.</td></tr></table>
+  <h3>Khi sử dụng hằng ngày</h3>
   <ul>
-    <li><b>Phân công rõ:</b> mỗi hợp đồng có một người phụ trách nhập liệu. Hai người không sửa cùng một hợp đồng hoặc cùng một kỳ thanh toán trong cùng lúc — nếu trùng, <b>bản lưu sau sẽ thay bản lưu trước</b> của riêng bản ghi đó. Các hợp đồng khác không bị ảnh hưởng.</li>
-    <li><b>Chờ đồng bộ:</b> thay đổi của người khác thường xuất hiện trong khoảng 1 phút (tùy OneDrive). Trước khi trình báo cáo, bấm nút đồng bộ ở góc trên và kiểm tra biểu tượng OneDrive đã đồng bộ xong.</li>
-    <li><b>Không mở/sửa file</b> <code>du-lieu-hop-dong.json</code> bằng tay. Nếu OneDrive tạo bản xung đột (tên có thêm tên máy), phần mềm tự gộp và xóa bản đó ở lần đồng bộ kế tiếp.</li>
-    <li><b>Cảnh báo “nhập TRÙNG số hợp đồng”</b> trên Tổng quan nghĩa là hai người đã cùng nhập một hợp đồng — giữ một bản, xóa bản kia.</li>
-    <li><b>Truy vết:</b> mọi thao tác ghi tên người làm trong báo cáo <b>6. Nhật ký thay đổi</b>; trang hợp đồng hiện “Sửa lần cuối” bởi ai.</li>
-    <li><b>Sao lưu tự động:</b> mỗi ngày phần mềm lưu một bản vào <code>DuLieu/SaoLuu/saoluu-[ngày].json</code>. Khôi phục: <kbd>Khôi phục từ file</kbd> — thao tác này áp dụng cho <b>tất cả</b> mọi người, chỉ người quản lý thực hiện.</li>
-    <li><b>Việc chỉ người quản lý làm:</b> xóa hợp đồng, khôi phục, “Xóa toàn bộ”, đổi ngưỡng cảnh báo.</li>
+    <li>Mỗi lần mở lại cần bấm <kbd>Đăng nhập Google</kbd> (một chạm) và nhập mật khẩu nếu máy không “Ghi nhớ”. Đóng xong có thể bấm <kbd>Đăng xuất Google</kbd> hoặc <kbd>Khóa</kbd> ở Cài đặt.</li>
+    <li><b>Một người dùng tại một thời điểm.</b> Phần mềm đồng bộ mỗi ~20 giây và khi quay lại trang; nếu hai thiết bị cùng sửa một bản ghi cùng lúc, bản lưu sau thay bản trước (chỉ riêng bản ghi đó).</li>
+    <li>Đính kèm tài liệu và xuất Excel thẳng vào thư mục máy chỉ có trên Chrome/Edge máy tính; trên điện thoại dùng nút tải file.</li>
+    <li><b>Không mở/sửa/xóa</b> các file trong thư mục <code>QuanLyHopDong</code> trên Drive bằng tay (file đã mã hóa).</li>
+    <li><b>Truy vết:</b> mọi thao tác được ghi trong báo cáo <b>6. Nhật ký thay đổi</b>.</li>
   </ul>
-  <div class="rule"><b>Giới hạn cần biết:</b> đây là dùng chung qua file đồng bộ, phù hợp nhóm nhỏ (khoảng 2–5 người) không nhập cùng một bản ghi cùng lúc. Mọi người có quyền sửa thư mục đều sửa được toàn bộ dữ liệu — không phân quyền theo từng chức năng. Nếu cần phân quyền chặt hoặc nhiều người nhập đồng thời, nên chuyển sang SharePoint List hoặc cơ sở dữ liệu (cần hỗ trợ của IT).</div>
+  <div class="rule"><b>Lưu ý bảo mật:</b> không chia sẻ mật khẩu Google và mật khẩu mã hóa; không chọn “Ghi nhớ” trên máy dùng chung hoặc máy công ty người khác dùng. Nếu mất điện thoại/laptop: đổi mật khẩu Google và đăng xuất các thiết bị tại myaccount.google.com.</div>
 </section>
 
 <section id="lich">
