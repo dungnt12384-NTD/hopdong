@@ -430,20 +430,22 @@ async function saveOut(buf,name,type,cat){
    File đính kèm cũ (f.where không có) vẫn nằm trong thư mục máy và mở bằng cách cũ. */
 const KINDLBL={hd:'Hợp đồng',tt:'Hồ sơ thanh toán',pl:'Phụ lục'};
 const MAXATT=25*1024*1024;
+const fsz=b=>b>=1048576?(b/1048576).toFixed(1)+' MB':Math.max(1,Math.round(b/1024))+' KB';
 const filePeriod=f=>f.period||(f.sub||'').split('/')[1]||'';
 const pickFiles=()=>new Promise(res=>{const i=document.createElement('input');i.type='file';i.multiple=true;i.onchange=()=>res([...i.files]);i.oncancel=()=>res([]);i.click()});
 async function attachFiles(cid,kind,aid){
   const c=contract(cid);
   if(!DIR)return alert('Cần đăng nhập Google và mở khóa dữ liệu trước khi đính kèm file.');
   const fl=await pickFiles();if(!fl.length)return;   // chọn file ngay trong thao tác bấm nút để trình duyệt không chặn
-  const big=fl.find(f=>f.size>MAXATT);if(big)return alert(`File "${big.name}" lớn hơn 25 MB. Hãy nén hoặc tách nhỏ rồi đính kèm lại.`);
+  const big=fl.filter(f=>f.size>MAXATT);
+  if(big.length)return alert(`Giới hạn mỗi file đính kèm là 25 MB. File quá lớn:\n${big.map(f=>`• ${f.name} (${fsz(f.size)})`).join('\n')}\n\nHãy nén file (xuất PDF dung lượng nhỏ, giảm độ phân giải ảnh) hoặc tách nhỏ rồi đính kèm lại.\nChưa có file nào được tải lên.`);
   let ym='';if(kind==='tt'){const p=prompt('Hồ sơ thanh toán của tháng nào? (YYYY-MM)',ymOf(refStr()));if(!p)return;if(!/^\d{4}-\d{2}$/.test(p.trim()))return alert('Tháng không hợp lệ');ym=p.trim()}
   const subs=kind==='tt'?[c.no,ym]:kind==='pl'?[c.no,'PhuLuc']:[c.no];let done=0;
   try{const d=await subDir(ROOT,['TaiLieu',...subs],true);c.files??=[];
     for(const f of fl){toast(`⟳ Đang tải lên Google Drive ${done+1}/${fl.length}: ${f.name}`,'warn');
       const n=await uniqueName(d,f.name),fh=await d.getFileHandle(n,{create:true}),w=await fh.createWritable();await w.write(f);await w.close();
       const sub=subs.map(safeName).join('/');
-      c.files.push({id:uid(),kind,name:n,sub,where:'drive',did:fh.id,at:new Date().toISOString(),...(kind==='tt'?{period:ym}:{}),...(aid?{aid}:{})});done++;
+      c.files.push({id:uid(),kind,name:n,sub,where:'drive',did:fh.id,size:f.size,at:new Date().toISOString(),...(kind==='tt'?{period:ym}:{}),...(aid?{aid}:{})});done++;
       log('Đính kèm file',`${c.no}: ${n}`,`${KINDLBL[kind]} → Google Drive/TaiLieu/${sub}`)}
     toast(`✓ Đã đính kèm ${done} file lên Google Drive`)}
   catch(e){alert(`Không đính kèm được hết${done?` (đã xong ${done}/${fl.length} file)`:''}: `+e.message)}
@@ -791,8 +793,9 @@ function vContract(){
       ${c.u?kv('Sửa lần cuối',new Date(c.u).toLocaleString('vi-VN')):''}
     </div></div>
   <div class="card"><div class="bar"><h2>📎 Tài liệu đính kèm (${(c.files||[]).length})</h2><span class="muted">File được lưu trên Google Drive (thư mục TaiLieu/${esc(safeName(c.no))}), mở được trên mọi thiết bị</span><div class="right"><button onclick="attachFiles('${c.id}','hd')">+ File hợp đồng</button><button onclick="attachFiles('${c.id}','tt')">+ Hồ sơ thanh toán</button></div></div>
-    <div class="tbl"><table><thead><tr><th>Loại</th><th>File</th><th>Nằm trong</th><th>Ngày đính kèm</th><th></th></tr></thead><tbody>
-    ${(c.files||[]).map(f=>`<tr><td>${KINDLBL[f.kind]||f.kind}</td><td><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></td><td class="muted">${f.where==='drive'?'☁ Drive: ':'💻 Máy (cũ): '}${esc(f.sub)}${f.aid?` · ${esc((c.amendments.find(a=>a.id===f.aid)||{}).no||'')}`:''}</td><td>${new Date(f.at).toLocaleDateString('vi-VN')}</td><td>${f.where==='drive'?`<button class="sm" title="Tải về" onclick="openAttach('${c.id}','${f.id}',true)">⬇</button> `:''}<button class="sm del" onclick="delAttach('${c.id}','${f.id}')">Gỡ</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">Chưa có file đính kèm</td></tr>'}</tbody></table></div></div>
+    <p class="hint" style="margin:0 0 8px">⚠ Giới hạn <b>25 MB mỗi file</b> (file lớn hơn sẽ bị từ chối, không file nào được tải lên). Nên dùng PDF nén hoặc ảnh giảm độ phân giải. Dung lượng file tính vào bộ nhớ Google Drive của tài khoản (15 GB miễn phí).${(c.files||[]).some(f=>f.size)?` Tổng dung lượng file đính kèm của hợp đồng này: <b>${fsz((c.files||[]).reduce((s,f)=>s+(f.size||0),0))}</b>.`:''}</p>
+    <div class="tbl"><table><thead><tr><th>Loại</th><th>File</th><th>Nằm trong</th><th class="n">Dung lượng</th><th>Ngày đính kèm</th><th></th></tr></thead><tbody>
+    ${(c.files||[]).map(f=>`<tr><td>${KINDLBL[f.kind]||f.kind}</td><td><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></td><td class="muted">${f.where==='drive'?'☁ Drive: ':'💻 Máy (cũ): '}${esc(f.sub)}${f.aid?` · ${esc((c.amendments.find(a=>a.id===f.aid)||{}).no||'')}`:''}</td><td class="n">${f.size?fsz(f.size):'—'}</td><td>${new Date(f.at).toLocaleDateString('vi-VN')}</td><td>${f.where==='drive'?`<button class="sm" title="Tải về" onclick="openAttach('${c.id}','${f.id}',true)">⬇</button> `:''}<button class="sm del" onclick="delAttach('${c.id}','${f.id}')">Gỡ</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Chưa có file đính kèm</td></tr>'}</tbody></table></div></div>
   <div class="card"><div class="bar"><h2>Chức danh (${c.positions.length})</h2><span class="muted">Ngày hết hạn = Ngày bắt đầu + Thời hạn − 1 ngày</span><div class="right"><button class="pri" onclick="editPos('${c.id}')">+ Thêm chức danh</button></div></div>
     <div class="tbl"><table><thead><tr><th>Mã</th><th>Chức danh</th><th class="n">SL</th><th class="n">Đơn giá/tháng</th><th class="n">Thời hạn</th><th>Bắt đầu</th><th>Hết hạn</th><th class="n">Còn lại</th><th>Trạng thái</th><th class="n">Giá trị</th><th>Ghi chú</th><th></th></tr></thead><tbody>
     ${c.positions.slice().sort((a,b)=>posEnd(c,a).localeCompare(posEnd(c,b))).map(p=>{const ps=pStatus(c,p);return`<tr><td>${esc(p.code)}</td><td><b>${esc(p.title)}</b></td><td class="n">${p.qty}</td><td class="n">${fmt(p.rate)}</td><td class="n">${p.months} th</td><td>${vn(posStart(c,p))}</td><td><b>${vn(posEnd(c,p))}</b></td><td class="n">${ps==='bad'?'':daysLeft(posEnd(c,p))}</td><td>${badge(ps)}</td><td class="n">${fmt(p.qty*p.rate*p.months)}</td><td class="muted">${esc(p.note)}</td>
@@ -892,7 +895,7 @@ function vSettings(){
       <li>Mọi thay đổi tự lưu vào file trên Drive; mỗi ngày tự có thêm một bản trong thư mục <code>SaoLuu</code>.</li>
       <li>Tự khóa sau 15 phút không thao tác (trừ thiết bị đã chọn "Ghi nhớ trên thiết bị này").</li></ol></div>
   <div class="card"><h2>📁 Nơi lưu trữ tài liệu đính kèm</h2>
-    <p class="muted">File hợp đồng, phụ lục và hồ sơ thanh toán đính kèm trong trang chi tiết hợp đồng được lưu trên <b>Google Drive</b>, trong thư mục <code>${GCFG.folder}/TaiLieu/&lt;số hợp đồng&gt;/…</code> (hồ sơ thanh toán có thêm thư mục con theo tháng). Dùng được trên cả máy tính và điện thoại, không cần chọn thư mục hay cấp quyền lại. Mỗi file tối đa 25 MB. File đính kèm <b>không</b> được mã hóa bằng mật khẩu như file dữ liệu: ai mở được Drive của tài khoản này đều xem được. Không đổi tên hay di chuyển các file này trong Drive bằng tay; hãy dùng nút "Gỡ" trong phần mềm.</p></div>
+    <p class="muted">File hợp đồng, phụ lục và hồ sơ thanh toán đính kèm trong trang chi tiết hợp đồng được lưu trên <b>Google Drive</b>, trong thư mục <code>${GCFG.folder}/TaiLieu/&lt;số hợp đồng&gt;/…</code> (hồ sơ thanh toán có thêm thư mục con theo tháng). Dùng được trên cả máy tính và điện thoại, không cần chọn thư mục hay cấp quyền lại. Giới hạn <b>25 MB mỗi file</b>: file lớn hơn sẽ bị từ chối và không file nào trong lần chọn đó được tải lên, nên hãy nén hoặc tách nhỏ trước. Dung lượng tính vào bộ nhớ Google Drive của tài khoản (15 GB miễn phí); bảng đính kèm trong từng hợp đồng hiện dung lượng từng file (file đính kèm trước đây chưa ghi dung lượng nên hiện "—"). File đính kèm <b>không</b> được mã hóa bằng mật khẩu như file dữ liệu: ai mở được Drive của tài khoản này đều xem được. Không đổi tên hay di chuyển các file này trong Drive bằng tay; hãy dùng nút "Gỡ" trong phần mềm.</p></div>
   <div class="card fsonly"><h2>📂 Thư mục trên máy này (chỉ máy tính, Chrome/Edge)</h2>
     <p class="muted">Dùng cho file xuất ra (báo cáo, biểu mẫu), file nhận về để nhập, và để mở các file đính kèm <b>cũ</b> đã lưu trong thư mục máy trước đây. Loại nào chưa chọn thì file Excel được tải về thư mục Downloads như thường lệ. Thư mục này chỉ nhớ trên thiết bị đang dùng; lần mở sau trình duyệt có thể hỏi lại quyền.</p>
     <div class="tbl"><table><thead><tr><th>Loại tài liệu</th><th>Dùng để</th><th>Thư mục đã chọn</th><th></th></tr></thead><tbody>
