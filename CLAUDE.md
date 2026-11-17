@@ -33,9 +33,10 @@ Phải chạy lệnh **trong thư mục repo**, nếu không server sẽ phục 
 
 ## Quy trình làm việc
 1. Pull trước khi sửa (mỗi máy có một bản clone riêng: máy bàn `D:\github\hopdong`, MacBook `~/Documents/GitHub/hopdong`; **không** đặt repo trong Google Drive/OneDrive).
-2. Sửa → chạy thử trên localhost (dữ liệu thử ở `QuanLyHopDong-Test`) → mới commit.
-3. **Chỉ push khi chủ repo đồng ý rõ ràng**, vì `main` là bản chạy thật của người dùng. Với thay đổi lớn nên dùng nhánh riêng + Pull Request.
-4. Windows: git của GitHub Desktop nằm ở `%LOCALAPPDATA%\GitHubDesktop\app-*\resources\app\git\cmd\git.exe` (git chưa có trong PATH).
+2. Sửa code web → chủ repo **tự test trên `http://localhost:8765`** → khi chủ repo báo OK thì mới commit/push. Claude không tự push khi chưa được nói.
+3. **Luôn hỏi chủ repo trước khi push** (kể cả khi chạy `sync-git`), vì `main` là bản chạy thật của người dùng. Với thay đổi lớn nên dùng nhánh riêng + Pull Request. Không `push --force`, không xóa nhánh.
+4. **Bản git chính thức duy nhất trên máy bàn công ty: `D:\github\hopdong`.** Mọi sửa đổi/commit/push làm ở đây. Không dùng `.git` trong `G:\My Drive\QuanLyHopDong`. Đồng bộ với MacBook (push lên/pull xuống) chỉ khi chủ repo nói.
+5. Windows: git của GitHub Desktop nằm ở `%LOCALAPPDATA%\GitHubDesktop\app-*\resources\app\git\cmd\git.exe` (git chưa có trong PATH).
 
 ## Quy ước
 - Giao tiếp và giao diện bằng **tiếng Việt**. Giữ nguyên phong cách code gọn, một file.
