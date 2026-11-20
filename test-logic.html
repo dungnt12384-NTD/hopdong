@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Kiểm thử logic dữ liệu</title>
+<style>
+body{font:14px/1.5 "Segoe UI",system-ui,sans-serif;margin:20px;max-width:900px;color:#1f2937}
+h1{font-size:18px}
+.ok{color:#15803d}.bad{color:#b91c1c;font-weight:600}
+li{margin:3px 0}
+#sum{font-size:16px;font-weight:600;margin:12px 0}
+</style>
+</head>
+<body>
+<h1>Kiểm thử logic dữ liệu &amp; mã hóa (không đụng Google Drive)</h1>
+<p>Trang này tự trích đoạn code giữa hai mốc <code>TEST-BEGIN</code>/<code>TEST-END</code> trong <code>index.html</code> rồi chạy thử. Mở qua <code>http://localhost:8765/test-logic.html</code>. Không đọc hay ghi dữ liệu thật.</p>
+<div id="sum">Đang chạy…</div>
+<ul id="out"></ul>
+<script>
+(async()=>{
+const out=document.getElementById('out'),sum=document.getElementById('sum');
+let pass=0,fail=0;
+const log=(ok,name,extra)=>{ok?pass++:fail++;const li=document.createElement('li');li.className=ok?'ok':'bad';li.textContent=(ok?'✔ ':'✘ ')+name+(ok||!extra?'':' — '+extra);out.appendChild(li)};
+const eq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const t=async(name,fn)=>{try{const r=await fn();log(r===true||r===undefined,name,r===false?'sai':String(r))}catch(e){log(false,name,'lỗi: '+e.message)}};
+
+const src=await(await fetch('index.html',{cache:'no-store'})).text();
+const a=src.indexOf('/*TEST-BEGIN'),b=src.indexOf('/*TEST-END*/');
+if(a<0||b<0||b<a){sum.className='bad';sum.textContent='Không tìm thấy mốc TEST-BEGIN/TEST-END trong index.html';return}
+const body='let S;'+src.slice(src.indexOf('*/',a)+2,b)+`
+return{mergeData,stamp,snap,canon,CR,encText,decText,kdfIter,KDF_OLD,KDF_NEW,TOMB_TTL,u8b64,b64u8,
+  setS:v=>{S=v},getS:()=>S,setME:v=>{ME=v}}`;
+const L=new Function(body)();
+const D=86400000,NOW=Date.UTC(2026,10,20);
+const mk=(o={})=>({v:2,vendors:[],contracts:[],payments:[],log:[],tomb:{},settings:{warn:30,horizon:90},...o});
+
+/* ---- Gộp dữ liệu ---- */
+await t('Bản ghi sửa sau (u lớn hơn) thắng',()=>{
+  const m=L.mergeData(mk({contracts:[{id:'c1',name:'cũ',u:100}]}),mk({contracts:[{id:'c1',name:'mới',u:200}]}),NOW);
+  return m.contracts.length===1&&m.contracts[0].name==='mới'});
+await t('Bản ghi chỉ có ở một phía vẫn được giữ',()=>{
+  const m=L.mergeData(mk({contracts:[{id:'c1',u:1}]}),mk({contracts:[{id:'c2',u:1}]}),NOW);
+  return m.contracts.length===2});
+await t('Dấu xóa (tomb) loại bản ghi cũ hơn hoặc bằng',()=>{
+  const m=L.mergeData(mk({contracts:[{id:'c1',u:100}]}),mk({tomb:{c1:NOW-D}}),NOW);
+  return m.contracts.length===0});
+await t('Bản ghi sửa SAU khi xóa thì sống lại đúng ý (u > tomb)',()=>{
+  const m=L.mergeData(mk({contracts:[{id:'c1',u:NOW-D+5}]}),mk({tomb:{c1:NOW-D}}),NOW);
+  return m.contracts.length===1});
+await t('Thanh toán của hợp đồng đã xóa bị loại (không mồ côi)',()=>{
+  const m=L.mergeData(mk({contracts:[{id:'c1',u:1}],payments:[{id:'p1',contractId:'c1',u:1},{id:'p2',contractId:'cX',u:1}]}),mk(),NOW);
+  return m.payments.length===1&&m.payments[0].id==='p1'});
+await t('Giao hoán: gộp(a,b) = gộp(b,a)',()=>{
+  const x=mk({contracts:[{id:'c1',name:'A',u:5},{id:'c2',u:3}],tomb:{v9:NOW-D}}),y=mk({contracts:[{id:'c1',name:'B',u:9}],vendors:[{id:'v1',u:2}]});
+  return L.canon(L.mergeData(x,y,NOW))===L.canon(L.mergeData(y,x,NOW))});
+await t('Lũy đẳng: gộp(a,a) = a',()=>{
+  const x=mk({contracts:[{id:'c1',u:5}],vendors:[{id:'v1',u:2}],tomb:{z:NOW-D}});
+  return L.canon(L.mergeData(x,x,NOW))===L.canon(x)});
+await t('Kết hợp: gộp(gộp(a,b),c) = gộp(a,gộp(b,c))',()=>{
+  const x=mk({contracts:[{id:'c1',name:'A',u:1}]}),y=mk({contracts:[{id:'c1',name:'B',u:2}],tomb:{q:NOW-D}}),z=mk({contracts:[{id:'c1',name:'C',u:3}],vendors:[{id:'v',u:1}]});
+  return L.canon(L.mergeData(L.mergeData(x,y,NOW),z,NOW))===L.canon(L.mergeData(x,L.mergeData(y,z,NOW),NOW))});
+
+/* ---- Dọn tombstone ---- */
+await t('Tomb quá 180 ngày bị dọn',()=>{
+  const m=L.mergeData(mk({tomb:{old:NOW-200*D}}),mk(),NOW);return !('old' in m.tomb)});
+await t('Tomb dưới 180 ngày được giữ',()=>{
+  const m=L.mergeData(mk({tomb:{recent:NOW-170*D}}),mk(),NOW);return 'recent' in m.tomb});
+await t('Xóa gần đây vẫn thắng bản ghi cũ ở máy kia dù tomb sắp hết hạn',()=>{
+  const m=L.mergeData(mk({contracts:[{id:'c1',u:NOW-179*D-10}]}),mk({tomb:{c1:NOW-179*D}}),NOW);return m.contracts.length===0});
+
+/* ---- stamp / tomb khi xóa ---- */
+await t('stamp: sửa bản ghi thì tăng u, xóa thì ghi tomb',()=>{
+  L.setME('test');
+  L.setS(mk({vendors:[{id:'v1',name:'A'}]}));L.snap();
+  const S=L.getS();S.vendors[0].name='B';L.stamp();
+  const okEdit=S.vendors[0].u>0&&S.vendors[0].by==='test';
+  S.vendors.length=0;L.stamp();
+  return okEdit&&typeof S.tomb.v1==='number'});
+
+/* ---- Mã hóa ---- */
+const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
+await t('kdfIter: đọc đúng số vòng, giá trị lạ/thiếu → 310000',()=>
+  L.kdfIter({kdf:'pbkdf2-sha256-600000'})===600000&&L.kdfIter({kdf:'pbkdf2-sha256-310000'})===310000&&L.kdfIter({})===310000&&L.kdfIter({kdf:'pbkdf2-sha256-999999999'})===310000&&L.kdfIter({kdf:'x'})===310000);
+await t('Mã hóa mới: ghi kdf 600000 và giải mã lại đúng',async()=>{
+  L.CR.pass='mat-khau-thu-1';L.CR.salt=rnd(16);L.CR.iter=L.KDF_NEW;L.CR.keys.clear();
+  const s=await L.encText('{"x":"Tiếng Việt 123"}'),o=JSON.parse(s);
+  return o.enc==='aes-gcm-v1'&&o.kdf==='pbkdf2-sha256-600000'&&await L.decText(s)==='{"x":"Tiếng Việt 123"}'});
+await t('Đọc được file CŨ (kdf 310000) tạo độc lập bằng WebCrypto',async()=>{
+  const pass='mat-khau-cu',salt=rnd(16),iv=rnd(12),text='{"cu":true}';
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  const k=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt']);
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,new TextEncoder().encode(text)));
+  const file=JSON.stringify({enc:'aes-gcm-v1',kdf:'pbkdf2-sha256-310000',salt:L.u8b64(salt),iv:L.u8b64(iv),data:L.u8b64(ct)});
+  L.CR.pass=pass;L.CR.keys.clear();L.CR.iter=L.KDF_NEW;
+  return await L.decText(file)===text});
+await t('Đọc được file không có trường kdf (coi như 310000)',async()=>{
+  const pass='p2',salt=rnd(16),iv=rnd(12);
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  const k=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt']);
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,new TextEncoder().encode('ok')));
+  L.CR.pass=pass;L.CR.keys.clear();
+  return await L.decText(JSON.stringify({enc:'aes-gcm-v1',salt:L.u8b64(salt),iv:L.u8b64(iv),data:L.u8b64(ct)}))==='ok'});
+await t('Sai mật khẩu → lỗi BADPASS',async()=>{
+  L.CR.pass='dung';L.CR.salt=rnd(16);L.CR.iter=L.KDF_NEW;L.CR.keys.clear();
+  const s=await L.encText('bi-mat');L.CR.pass='sai';L.CR.keys.clear();
+  try{await L.decText(s);return 'không báo lỗi'}catch(e){return e.code==='BADPASS'}});
+await t('File bị sửa 1 byte → lỗi (GCM phát hiện)',async()=>{
+  L.CR.pass='dung';L.CR.salt=rnd(16);L.CR.iter=L.KDF_NEW;L.CR.keys.clear();
+  const o=JSON.parse(await L.encText('bi-mat')),d=L.b64u8(o.data);d[0]^=1;o.data=L.u8b64(d);
+  try{await L.decText(JSON.stringify(o));return 'không báo lỗi'}catch(e){return e.code==='BADPASS'}});
+await t('Nâng cấp: đọc bằng 310000 rồi ghi lại bằng 600000 vẫn đọc được',async()=>{
+  const pass='nc',salt=rnd(16),iv=rnd(12);
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  const k=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt']);
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,new TextEncoder().encode('{"n":1}')));
+  const oldFile=JSON.stringify({enc:'aes-gcm-v1',kdf:'pbkdf2-sha256-310000',salt:L.u8b64(salt),iv:L.u8b64(iv),data:L.u8b64(ct)});
+  L.CR.pass=pass;L.CR.keys.clear();L.CR.salt=salt;L.CR.iter=L.KDF_NEW;
+  const plain=await L.decText(oldFile),neu=await L.encText(plain);
+  return JSON.parse(neu).kdf==='pbkdf2-sha256-600000'&&await L.decText(neu)==='{"n":1}'&&await L.decText(oldFile)==='{"n":1}'});
+
+sum.className=fail?'bad':'ok';
+sum.textContent=fail?`Có ${fail} lỗi / ${pass+fail} phép thử`:`Tất cả ${pass} phép thử đều đạt`;
+})();
+</script>
+</body>
+</html>

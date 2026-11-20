@@ -14,7 +14,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js" integrity="sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz" crossorigin="anonymous"></script>
 <style>
 :root{--bg:#f4f6f9;--card:#fff;--text:#1f2937;--muted:#6b7280;--line:#e5e7eb;--pri:#1e40af;--navy:#1e3a8a}
 *{box-sizing:border-box}
@@ -168,6 +168,7 @@ function log(action,text,detail){S.log.unshift({t:new Date().toISOString(),actio
 /* ===== Dữ liệu dùng chung qua Google Drive =====
    Mọi thiết bị đăng nhập cùng tài khoản Google. Dữ liệu nằm trong file du-lieu-hop-dong.json (mã hóa) trên Drive.
    Mỗi bản ghi có dấu thời gian sửa cuối (u); khi 2 máy cùng sửa, hệ thống gộp theo từng bản ghi, bản sửa sau thắng. */
+/*TEST-BEGIN (test-logic.html trích đoạn code giữa 2 mốc này để kiểm thử)*/
 const DATAFILE='du-lieu-hop-dong.json',COLS=['vendors','contracts','payments'];
 let DIR=null,PEND=null,SNAP={},syncing=false,syncPending=false,syncTimer=null,bkDone='',ME='',SYNC={state:'off',msg:'',time:''};
 let LOADED=false;
@@ -179,11 +180,13 @@ function stamp(){const now=Date.now(),seen={};S.tomb??={};
   COLS.forEach(k=>S[k].forEach(r=>{seen[r.id]=1;if(SNAP[r.id]!==sig(r)){r.u=Math.max(now,(r.u||0)+1);r.by=ME}}));
   Object.keys(SNAP).forEach(id=>{if(id!=='__set'&&!seen[id])S.tomb[id]=Math.max(now,(SNAPU[id]||0)+1)});
   if(SNAP.__set!==setSig())S.settings.u=Math.max(now,(S.settings.u||0)+1);snap()}
-function mergeData(a,b){
+const TOMB_TTL=180*864e5;   // dấu xóa quá 180 ngày thì dọn (máy nào offline lâu hơn mức này mới có thể làm bản ghi đã xóa hiện lại)
+function mergeData(a,b,now=Date.now()){
   const o={v:2,settings:(b.settings?.u||0)>(a.settings?.u||0)?b.settings:a.settings,tomb:{}};
   for(const t of[a.tomb||{},b.tomb||{}])for(const id in t)o.tomb[id]=Math.max(o.tomb[id]||0,t[id]);
   COLS.forEach(k=>{const m=new Map();for(const src of[a,b])(src[k]||[]).forEach(r=>{const e=m.get(r.id);if(!e||(r.u||0)>(e.u||0))m.set(r.id,r)});
     o[k]=[...m.values()].filter(r=>!(o.tomb[r.id]>=(r.u||0))).sort((x,y)=>x.id<y.id?-1:1)});
+  for(const id in o.tomb)if(now-o.tomb[id]>TOMB_TTL)delete o.tomb[id];
   const cids=new Set(o.contracts.map(c=>c.id));o.payments=o.payments.filter(p=>cids.has(p.contractId));
   const seen=new Set();o.log=[...(a.log||[]),...(b.log||[])].filter(l=>{const k=l.t+l.action+l.text;if(seen.has(k))return false;seen.add(k);return true}).sort((x,y)=>y.t.localeCompare(x.t)).slice(0,5000);
   return o}
@@ -195,31 +198,34 @@ const idb=(mode,fn)=>new Promise((res,rej)=>{const rq=indexedDB.open('hd-manager
    Mọi file dữ liệu/sao lưu được mã hóa bằng mật khẩu ngay trên máy trước khi tải lên: Google, nơi đặt web đều không đọc được nội dung. */
 const GCFG={clientId:'680403336516-stpdhc7ucmfscus5rph74790tccgv3u0.apps.googleusercontent.com',scope:'https://www.googleapis.com/auth/drive.file',folder:(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'QuanLyHopDong-Test':'QuanLyHopDong'};   // chạy thử trên máy (localhost) dùng thư mục riêng, không đụng dữ liệu thật
 const GD={tok:'',exp:0,client:null,busy:null,state:'init',mode:'',err:'',user:'',lost:false,hdr:null};   // state: init | nogis | signin | unlock | ok
-const CR={pass:'',salt:null,keys:new Map(),remember:false,on:false};
+const KDF_OLD=310000,KDF_NEW=600000;   // số vòng PBKDF2: file cũ vẫn đọc được theo trường kdf trong file; file mới ghi bằng KDF_NEW
+const CR={pass:'',salt:null,keys:new Map(),remember:false,on:false,iter:KDF_NEW};
+const kdfIter=o=>{const m=/^pbkdf2-sha256-(\d+)$/.exec((o&&o.kdf)||'');const n=m?+m[1]:KDF_OLD;return n>=100000&&n<=2000000?n:KDF_OLD};
 let ROOT=null,FORCEW=false;
 const u8b64=u=>{let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s)};
 const b64u8=b=>Uint8Array.from(atob(b),c=>c.charCodeAt(0));
 
 /* --- Mã hóa --- */
-async function crKey(pass,salt){const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
-  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function crKey(pass,salt,iter){const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter||KDF_OLD,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
 const needPass=()=>Object.assign(new Error('Cần nhập mật khẩu mã hóa'),{code:'NEEDPASS'});
-async function crGet(saltB64){let k=CR.keys.get(saltB64);if(k)return k;if(!CR.pass)throw needPass();k=await crKey(CR.pass,b64u8(saltB64));CR.keys.set(saltB64,k);return k}
-async function encText(str){if(!CR.salt)throw needPass();const sb=u8b64(CR.salt),iv=crypto.getRandomValues(new Uint8Array(12)),k=await crGet(sb);
+async function crGet(saltB64,iter){iter=iter||KDF_OLD;const id=saltB64+'|'+iter;let k=CR.keys.get(id);if(k)return k;if(!CR.pass)throw needPass();k=await crKey(CR.pass,b64u8(saltB64),iter);CR.keys.set(id,k);return k}
+async function encText(str){if(!CR.salt)throw needPass();const sb=u8b64(CR.salt),iv=crypto.getRandomValues(new Uint8Array(12)),it=CR.iter||KDF_OLD,k=await crGet(sb,it);
   const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},k,new TextEncoder().encode(str));
-  return JSON.stringify({enc:'aes-gcm-v1',kdf:'pbkdf2-sha256-310000',salt:sb,iv:u8b64(iv),data:u8b64(new Uint8Array(ct))})}
+  return JSON.stringify({enc:'aes-gcm-v1',kdf:'pbkdf2-sha256-'+it,salt:sb,iv:u8b64(iv),data:u8b64(new Uint8Array(ct))})}
 async function decText(txt){let o;try{o=JSON.parse(txt)}catch(e){throw new Error('File không đọc được (không phải JSON)')}
   if(!o||o.enc!=='aes-gcm-v1')return txt;
-  const k=await crGet(o.salt);
+  const k=await crGet(o.salt,kdfIter(o));
   try{return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64u8(o.iv)},k,b64u8(o.data)))}
   catch(e){throw Object.assign(new Error('Sai mật khẩu mã hóa (hoặc file đã bị sửa)'),{code:'BADPASS'})}}
 async function readJson(fh){try{const f=await fh.getFile();return JSON.parse(await decText(await f.text()))}catch(e){if(e&&(e.code==='NEEDPASS'||e.code==='BADPASS'))throw e;return null}}
 async function writeJson(dir,name,data){const s=JSON.stringify(data),fh=await dir.getFileHandle(name,{create:true}),w=await fh.createWritable();await w.write(CR.on?await encText(s):s);await w.close()}
-async function crRemember(){try{const sb=u8b64(CR.salt),key=await crGet(sb);await idb('readwrite',s=>s.put({salt:sb,key},'ckey'))}catch(e){}}
-async function crTryRemembered(hdr){try{const c=await idb('readonly',s=>s.get('ckey'));if(!c||c.salt!==hdr.salt)return false;
-  CR.keys.set(c.salt,c.key);CR.salt=b64u8(c.salt);await decText(JSON.stringify(hdr));CR.on=true;CR.remember=true;return true}
+async function crRemember(){try{const sb=u8b64(CR.salt),it=CR.iter||KDF_OLD,key=await crGet(sb,it);await idb('readwrite',s=>s.put({salt:sb,key,iter:it},'ckey'))}catch(e){}}
+async function crTryRemembered(hdr){try{const c=await idb('readonly',s=>s.get('ckey')),it=kdfIter(hdr);if(!c||c.salt!==hdr.salt||(c.iter||KDF_OLD)!==it)return false;   // khóa nhớ cũ (số vòng khác file) → hỏi lại mật khẩu 1 lần
+  CR.keys.set(c.salt+'|'+it,c.key);CR.salt=b64u8(c.salt);CR.iter=it;await decText(JSON.stringify(hdr));CR.on=true;CR.remember=true;return true}
   catch(e){CR.keys.clear();CR.salt=null;return false}}
 
+/*TEST-END*/
 /* --- Đăng nhập Google (Google Identity Services, quyền drive.file) --- */
 const gisReady=()=>!!(window.google&&google.accounts&&google.accounts.oauth2);
 function gInit(){if(GD.client)return true;if(!gisReady())return false;GD.client=google.accounts.oauth2.initTokenClient({client_id:GCFG.clientId,scope:GCFG.scope,callback:()=>{},error_callback:()=>{}});return true}
@@ -246,6 +252,8 @@ class GFile{
   async getFile(){if(!this.id)throw notFound('Không tìm thấy file');const c=TXTC[this.id];let text;
     if(c&&this.md5&&c.md5===this.md5)text=c.text;else{text=await(await gfetch('/drive/v3/files/'+this.id+'?alt=media')).text();TXTC[this.id]={md5:this.md5,text}}
     return{name:this.name,size:text.length,text:async()=>text}}
+  async changed(){if(!this.id||!this.md5)return false;   // file trên Drive đã bị máy khác ghi kể từ lúc ta đọc chưa?
+    const j=await(await gfetch('/drive/v3/files/'+this.id+'?fields=md5Checksum')).json();return (j.md5Checksum||'')!==this.md5}
   async createWritable(){const self=this,parts=[];return{write:async d=>{if(d instanceof Blob)self.mime=d.type||'application/octet-stream';parts.push(d)},close:async()=>{await self._save(parts.length===1&&typeof parts[0]==='string'?parts[0]:new Blob(parts))}}}
   async _save(body){const type=this.mime||'application/json';let r;
     if(this.id)r=await gfetch('/upload/drive/v3/files/'+this.id+'?uploadType=media&fields=id,md5Checksum',{method:'PATCH',headers:{'Content-Type':type},body});
@@ -293,11 +301,11 @@ async function gUnlock(){
     if(p!==$('#gpw2').value){GD.err='Hai lần nhập chưa giống nhau';return gate()}
     CR.salt=crypto.getRandomValues(new Uint8Array(16))}
   else CR.salt=b64u8(GD.hdr.salt);
-  CR.pass=p;CR.keys.clear();
+  CR.pass=p;CR.keys.clear();CR.iter=KDF_NEW;   // có mật khẩu → từ lần ghi tới dùng số vòng mới (gFinish buộc ghi lại nếu file đang dùng số vòng cũ)
   if(GD.mode==='enter'){try{await decText(JSON.stringify(GD.hdr))}catch(e){CR.pass='';GD.err=e.message;return gate()}}
   CR.on=true;CR.remember=rem;if(rem)await crRemember();
   gFinish()}
-async function gFinish(){DIR=ROOT;GD.state='ok';GD.err='';FORCEW=(GD.mode==='create');gate();await syncNow();render()}
+async function gFinish(){DIR=ROOT;GD.state='ok';GD.err='';FORCEW=(GD.mode==='create')||!!(GD.hdr&&GD.hdr.enc&&kdfIter(GD.hdr)!==CR.iter);gate();await syncNow();render()}
 async function lockApp(forget,msg){
   if(saveSeq>savedSeq)return toast('Đang lưu dở, thử lại sau giây lát','warn');
   if(forget){try{await idb('readwrite',s=>s.delete('ckey'))}catch(e){}CR.remember=false}
@@ -321,7 +329,7 @@ function askNewPass(){return new Promise(res=>{const d=document.createElement('d
   f.onsubmit=e=>{e.preventDefault();const a=d.querySelector('#np1').value,b=d.querySelector('#np2').value,m=d.querySelector('#npe');
     if(a.length<8||a!==b){m.style.display='block';m.textContent=a.length<8?'Mật khẩu tối thiểu 8 ký tự':'Hai lần nhập chưa giống nhau';return}d.remove();res(a)}})}
 async function changePass(){if(!DIR)return;const a=await askNewPass();if(!a)return;
-  CR.pass=a;CR.salt=crypto.getRandomValues(new Uint8Array(16));FORCEW=true;   // giữ khóa cũ trong CR.keys để còn đọc được file cũ trong phiên này
+  CR.pass=a;CR.iter=KDF_NEW;CR.salt=crypto.getRandomValues(new Uint8Array(16));FORCEW=true;   // giữ khóa cũ trong CR.keys để còn đọc được file cũ trong phiên này
   if(CR.remember)await crRemember();await syncNow();toast('✓ Đã đổi mật khẩu mã hóa')}
 
 function gate(){let g=document.getElementById('gate');
@@ -348,14 +356,16 @@ async function syncNow(){
   const dg=document.getElementById('dlg');if((dg&&dg.open)||(typeof IMP!=='undefined'&&(IMP||IMPP)))return;
   syncing=true;setSync('busy');const seq=saveSeq;
   try{
-    let remote=null;const extras=[];
+    let remote=null,remoteFh=null;const extras=[];
     for await(const[name,h]of DIR.entries()){const n=name.toLowerCase();if(h.kind!=='file'||!n.endsWith('.json')||!n.startsWith('du-lieu-hop-dong'))continue;
       const d=await readJson(h);if(!d||!d.contracts){if(name===DATAFILE)throw new Error('Chưa đọc được file dữ liệu trên Google Drive (mạng chập chờn hoặc file đang được ghi)');continue}
-      if(name===DATAFILE)remote=d;else extras.push({name,d})}
+      if(name===DATAFILE){remote=d;remoteFh=h}else extras.push({name,d})}
     const before=canon(S);let M=S;if(remote)M=mergeData(M,remote);extras.forEach(x=>M=mergeData(M,x.d));
     if(M!==S){M.settings={...M.settings,lastBackup:S.settings.lastBackup};S=M;snap()}
     const after=canon(S);
-    if(!remote||extras.length||FORCEW||canon(remote)!==after){await writeJson(DIR,DATAFILE,S);FORCEW=false;for(const x of extras)try{await DIR.removeEntry(x.name)}catch(e){}}
+    if(!remote||extras.length||FORCEW||canon(remote)!==after){
+      if(remoteFh&&await remoteFh.changed()){syncPending=true;return}   // máy khác vừa ghi giữa lúc ta đọc và ghi → đọc lại, gộp lại rồi mới ghi (tránh đè mất thay đổi của máy kia)
+      await writeJson(DIR,DATAFILE,S);FORCEW=false;for(const x of extras)try{await DIR.removeEntry(x.name)}catch(e){}}
     setTimeout(bkTick,300);
     LOADED=true;setSync('ok',extras.length?`Đã gộp ${extras.length} bản xung đột`:'');
     if(seq>savedSeq){savedSeq=seq;toast(`✓ Đã lưu vào cơ sở dữ liệu lúc ${new Date().toLocaleTimeString('vi-VN')}`)}

@@ -11,7 +11,7 @@ Web app cá nhân, **một file `index.html`** (HTML + CSS + JS thuần, không 
 ## Dữ liệu nằm ở đâu
 - Không có máy chủ. Trình duyệt gọi thẳng Google Drive API bằng Google Identity Services (quyền `drive.file`, chỉ thấy file do chính app tạo).
 - Dữ liệu ở thư mục **`QuanLyHopDong`** (gốc My Drive của tài khoản đăng nhập): `du-lieu-hop-dong.json` + thư mục `SaoLuu/` (sao lưu tự động theo lịch trong Cài đặt).
-- File được **mã hóa AES-GCM 256** (khóa PBKDF2-SHA256, 310000 vòng) bằng mật khẩu người dùng đặt; quên mật khẩu = mất dữ liệu. Tuyệt đối không phá định dạng `{enc:'aes-gcm-v1',kdf,salt,iv,data}`.
+- File được **mã hóa AES-GCM 256** (khóa PBKDF2-SHA256; file mới 600000 vòng, file cũ 310000 vòng vẫn đọc được theo trường `kdf`) bằng mật khẩu người dùng đặt; quên mật khẩu = mất dữ liệu. Tuyệt đối không phá định dạng `{enc:'aes-gcm-v1',kdf,salt,iv,data}`.
 - Mỗi thay đổi gọi `save()` → `syncNow()` ghi ngay lên Drive; đồng bộ lại mỗi ~20 giây và khi trang lấy lại focus.
 - Khi chạy ở `localhost`/`127.0.0.1`, app tự dùng thư mục **`QuanLyHopDong-Test`** (xem `GCFG.folder`) để không đụng dữ liệu thật.
 - Phiên Google giữ trong `sessionStorage` (`hd_tok`, tối đa 1 giờ) để F5 không phải đăng nhập lại; khóa mã hóa có thể "Ghi nhớ" trong IndexedDB (khóa không xuất được).
