@@ -545,6 +545,11 @@ function cValue(c){return +c.value||c.positions.reduce((s,p)=>s+(+p.qty||0)*(+p.
 function cPaid(cid){return S.payments.filter(p=>p.contractId===cid&&p.payDate).reduce((s,p)=>s+(+p.amount||0),0)}
 function cBilled(cid){return S.payments.filter(p=>p.contractId===cid).reduce((s,p)=>s+(+p.amount||0),0)}
 function daysLeft(end){return Math.round((parse(end)-refD())/DAY)}
+/* Thời gian còn lại dạng "x tháng y ngày" (tháng lịch, tính từ hôm nay đến ngày hết hạn; cùng mốc với daysLeft) */
+function remTxt(end){const r=refD(),e=parse(end);if(e<r)return'';let m=0;while(addMonths(r,m+1)<=e)m++;const d=Math.round((e-addMonths(r,m))/DAY);return(m?m+' tháng':'')+(m&&d?' ':'')+(d||!m?d+' ngày':'')}
+/* Sắp xếp chức danh theo mã trong hợp đồng (1, 2, … 10 theo số; không có mã thì giữ thứ tự nhập) */
+const byCode=(a,b)=>!a.code||!b.code?(!a.code)-(!b.code):String(a.code).localeCompare(String(b.code),'vi',{numeric:true});
+const todoList=c=>String(c.todo||'').split('\n').map(s=>s.trim()).filter(Boolean);
 function cStatus(c){
   if(c.status==='draft')return'draft';if(c.status==='liq')return'liq';
   const r=refD();if(r<parse(c.start))return'wait';
@@ -657,6 +662,7 @@ function contractFields(){return[{k:'no',label:'Số hợp đồng',req:1,ph:'H�
   {k:'pr',more:1,label:'Cách tính tháng làm không đủ',type:'select',opts:PR_OPTS,full:1,hint:'Hợp đồng khung PVEP (ví dụ 2026-005A) chọn "Theo năm 365 ngày"'},
   {k:'bondAmt',more:1,money:1,label:'Bảo lãnh thực hiện (số tiền)',type:'number'},{k:'bondEnd',more:1,label:'Bảo lãnh hết hạn',type:'date'},
   {k:'owner',label:'Người phụ trách'},{k:'dept',more:1,label:'Phòng ban'},
+  {k:'todo',label:'Việc cần bổ sung (nhắc việc)',type:'textarea',full:1,hint:'Mỗi dòng một việc. App nhắc ở trang Tổng quan/Cảnh báo cho đến khi anh/chị xóa dòng đó.'},
   {k:'link',more:1,label:'Đường dẫn file scan HĐ',full:1,ph:'https://...sharepoint.com/... hoặc C:\\HopDong\\HD-001.pdf'},{k:'note',more:1,label:'Ghi chú',type:'textarea',full:1}]}
 function editContract(id){
   const c=id?contract(id):{status:'signed',type:TYPES[0],currency:'VND',vendorId:UI.page==='vendor'?UI.id:(S.vendors.length?'':'__new')};
@@ -814,6 +820,7 @@ function alerts(){
   for(const c of S.contracts){if(c.status==='draft'||c.status==='liq')continue;const st=cStatus(c),end=cEnd(c),l=daysLeft(end),vn_=vendor(c.vendorId).name;
     if(st==='bad')A.push({lvl:'bad',cid:c.id,t:`${c.no} (${vn_}) đã hết hạn ngày ${vn(end)} nhưng chưa thanh lý.`});
     else if(st!=='wait'&&l<=H)A.push({lvl:l<=W?'bad':l<=60?'warn':'info',cid:c.id,t:`${c.no} (${vn_}) hết hạn ngày ${vn(end)} — còn ${l} ngày. Chuẩn bị gia hạn hoặc lựa chọn nhà thầu mới.`});
+    todoList(c).forEach(t=>A.push({lvl:'warn',cid:c.id,t:`${c.no}: cần bổ sung — ${t}`}));
     for(const p of c.positions){if(p.st==='tbc')A.push({lvl:'warn',cid:c.id,t:`${c.no}: chức danh "${p.title}" CHƯA CÓ NGÀY BẮT ĐẦU — chưa tính vào thanh toán/dự báo. Bổ sung ngày khi có thông báo huy động.`});
       else if(p.st==='dk'){const s=posStart(c,p);A.push(s<=refStr()?{lvl:'warn',cid:c.id,t:`${c.no}: chức danh "${p.title}" đã qua ngày bắt đầu DỰ KIẾN ${vn(s)} — cập nhật ngày bắt đầu thực tế.`}:{lvl:'info',cid:c.id,t:`${c.no}: chức danh "${p.title}" có ngày bắt đầu DỰ KIẾN ${vn(s)} — cập nhật khi có ngày thực tế.`})}}
     if(st!=='bad')for(const p of c.positions){if(isTbc(p))continue;const pe=posEnd(c,p),pl=daysLeft(pe);if(pe!==end&&pl>=0&&pl<=W)A.push({lvl:'warn',cid:c.id,t:`${c.no}: chức danh "${p.title}" hết hạn ngày ${vn(pe)} (còn ${pl} ngày) — dừng thanh toán sau ngày này.`})}
@@ -934,20 +941,20 @@ function vContract(){
     <div class="grid2">
       ${kv('Nhà thầu',`<a href="#" onclick="go('vendor','${v.id}');return false">${esc(v.name)}</a>`)}${kv('Loại hợp đồng',esc(c.type))}
       ${kv('Ngày ký',vn(c.signDate)||'—')}${kv('Hiệu lực → Hết hạn',`${vn(c.start)} → ${vn(end)}${c.end?'':' <span class="muted">(tự tính)</span>'}`)}
-      ${kv('Còn lại',['ok','warn','wait'].includes(st)?daysLeft(end)+' ngày':'—')}${kv('Giá trị HĐ',fmt(val)+' '+c.currency+(c.value?'':' <span class="muted">(tự tính)</span>'))}
+      ${kv('Còn lại',['ok','warn','wait'].includes(st)?remTxt(end)+` <span class="muted">(${daysLeft(end)} ngày)</span>`:'—')}${kv('Giá trị HĐ',fmt(val)+' '+c.currency+(c.value?'':' <span class="muted">(tự tính)</span>'))}
       ${kv('Đã thanh toán',`${fmt(paid)} (${val?Math.round(paid/val*100):0}%)`)}${kv('Còn lại chưa thanh toán',fmt(val-paid))}
       ${kv('Đã đề nghị nhưng chưa trả',fmt(billed-paid))}${kv('Bảo lãnh thực hiện',c.bondAmt?`${fmt(c.bondAmt)} — hết hạn ${vn(c.bondEnd)||'?'}`:'—')}
       ${kv('Người phụ trách',esc(c.owner)||'—')}${kv('Phòng ban',esc(c.dept)||'—')}${c.pr?kv('Tính tháng làm không đủ',esc(PR_OPTS.find(o=>o[0]===c.pr)[1])):''}
       ${kv('File hợp đồng',linkHtml(c.link))}${kv('Ghi chú',esc(c.note)||'—')}
       ${c.u?kv('Sửa lần cuối',new Date(c.u).toLocaleString('vi-VN')):''}
-    </div></div>
+    </div>${todoList(c).length?`<div class="warnbox" style="margin-top:10px"><b>📝 Việc cần bổ sung</b> <span class="muted">(bấm Sửa để cập nhật; xóa dòng khi đã xong)</span><br>• ${todoList(c).map(esc).join('<br>• ')}</div>`:''}</div>
   <div class="card"><div class="bar"><h2>📎 Tài liệu đính kèm (${(c.files||[]).length})</h2><span class="muted">File được lưu trên Google Drive (thư mục TaiLieu/${esc(safeName(c.no))}), mở được trên mọi thiết bị</span><div class="right"><button onclick="attachFiles('${c.id}','hd')">+ File hợp đồng</button><button onclick="attachFiles('${c.id}','tt')">+ Hồ sơ thanh toán</button></div></div>
     <p class="hint" style="margin:0 0 8px">⚠ Giới hạn <b>25 MB mỗi file</b> (file lớn hơn sẽ bị từ chối, không file nào được tải lên). Chỉ nhận <b>PDF, ảnh (JPG, PNG, GIF, WEBP, HEIC), Word, Excel, PowerPoint, TXT, CSV, ZIP</b>; PDF và ảnh mở xem trực tiếp, các loại khác sẽ được tải về. Nên dùng PDF nén hoặc ảnh giảm độ phân giải. Dung lượng file tính vào bộ nhớ Google Drive của tài khoản (15 GB miễn phí).${(c.files||[]).some(f=>f.size)?` Tổng dung lượng file đính kèm của hợp đồng này: <b>${fsz((c.files||[]).reduce((s,f)=>s+(f.size||0),0))}</b>.`:''}</p>
     <div class="tbl"><table><thead><tr><th>Loại</th><th>File</th><th>Nằm trong</th><th class="n">Dung lượng</th><th>Ngày đính kèm</th><th></th></tr></thead><tbody>
     ${(c.files||[]).map(f=>`<tr><td>${KINDLBL[f.kind]||f.kind}</td><td><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></td><td class="muted">${f.where==='drive'?'☁ Drive: ':'💻 Máy (cũ): '}${esc(f.sub)}${f.aid?` · ${esc((c.amendments.find(a=>a.id===f.aid)||{}).no||'')}`:''}</td><td class="n">${f.size?fsz(f.size):'—'}</td><td>${new Date(f.at).toLocaleDateString('vi-VN')}</td><td>${f.where==='drive'?`<button class="sm" title="Tải về" onclick="openAttach('${c.id}','${f.id}',true)">⬇</button> `:''}<button class="sm del" onclick="delAttach('${c.id}','${f.id}')">Gỡ</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Chưa có file đính kèm</td></tr>'}</tbody></table></div></div>
   <div class="card"><div class="bar"><h2>Chức danh (${c.positions.length})</h2><span class="muted">Ngày hết hạn = Ngày bắt đầu + Thời hạn − 1 ngày</span><div class="right"><button class="pri" onclick="bulkPos('${c.id}')">+ Nhập nhiều chức danh</button><button onclick="editPos('${c.id}')">+ Thêm 1 chức danh</button></div></div>
     <div class="tbl"><table><thead><tr><th>Mã</th><th>Chức danh</th><th class="n">SL</th><th class="n">Đơn giá/tháng</th><th class="n">Thời hạn</th><th>Bắt đầu</th><th>Hết hạn</th><th class="n">Còn lại</th><th>Trạng thái</th><th class="n">Giá trị</th><th>Ghi chú</th><th></th></tr></thead><tbody>
-    ${c.positions.slice().sort((a,b)=>(peX(c,a)||'9').localeCompare(peX(c,b)||'9')).map(p=>{const ps=pStatus(c,p);return`<tr><td>${esc(p.code)}</td><td><b>${esc(p.title)}</b></td><td class="n">${p.qty}</td><td class="n">${fmt(p.rate)}</td><td class="n">${p.months} th</td><td>${pStartHtml(c,p)}</td><td><b>${isTbc(p)?'—':vn(posEnd(c,p))}</b></td><td class="n">${ps==='bad'||ps==='tbc'?'':daysLeft(posEnd(c,p))}</td><td>${badge(ps)}</td><td class="n">${fmt(p.qty*p.rate*p.months)}</td><td class="muted">${esc(p.note)}</td>
+    ${c.positions.slice().sort(byCode).map(p=>{const ps=pStatus(c,p);return`<tr><td>${esc(p.code)}</td><td><b>${esc(p.title)}</b></td><td class="n">${p.qty}</td><td class="n">${fmt(p.rate)}</td><td class="n">${p.months} th</td><td>${pStartHtml(c,p)}</td><td><b>${isTbc(p)?'—':vn(posEnd(c,p))}</b></td><td class="n" title="${ps==='bad'||ps==='tbc'?'':daysLeft(posEnd(c,p))+' ngày'}">${ps==='bad'||ps==='tbc'?'':remTxt(posEnd(c,p))}</td><td>${badge(ps)}</td><td class="n">${fmt(p.qty*p.rate*p.months)}</td><td class="muted">${esc(p.note)}</td>
       <td><button class="sm" onclick="editPos('${c.id}','${p.id}')">Sửa</button> <button class="sm del" onclick="delPos('${c.id}','${p.id}')">Xóa</button></td></tr>`}).join('')||'<tr><td colspan="12" class="muted">Chưa có chức danh</td></tr>'}</tbody></table></div></div>
   <div class="card"><div class="bar"><h2>Phụ lục / lệnh giao việc / lệnh thay đổi (${c.amendments.length})</h2><span class="muted">Ghi lại ở đây, rồi cập nhật chức danh tương ứng (nếu có).</span><div class="right"><button onclick="editAmd('${c.id}')">+ Thêm phụ lục / lệnh</button></div></div>
     <div class="tbl"><table><thead><tr><th>Loại</th><th>Số</th><th>Ngày</th><th class="n">Giá trị</th><th>Nội dung</th><th>File</th><th></th></tr></thead><tbody>
@@ -1212,7 +1219,7 @@ function vHistory(){
   ['hq','hg','hf','ht'].forEach(id=>$('#'+id).oninput=draw);draw();
 }
 function repContract(cid){const c=contract(cid),v=vendor(c.vendorId),val=cValue(c),pd=cPaid(c.id);
-  const P=c.positions.slice().sort((a,b)=>(peX(c,a)||'9').localeCompare(peX(c,b)||'9'));
+  const P=c.positions.slice().sort(byCode);
   const infos=[['Nhà thầu:',v.name],['Hiệu lực:',`${vn(c.start)} → ${vn(cEnd(c))}`],['Giá trị HĐ:',`${fmt(val)} ${c.currency} — đã thanh toán ${fmt(pd)} (${val?Math.round(pd/val*100):0}%)`],INFO_REF()];
   const s1={name:'Chuc danh',title:`THEO DÕI HỢP ĐỒNG ${c.no}`,infos,cols:[{h:'STT',w:6,t:'int'},{h:'Mã',w:8},{h:'Chức danh',w:28,b:1},{h:'SL',w:7,t:'int'},{h:'Đơn giá/tháng',w:15,t:'num'},{h:'Thời hạn (tháng)',w:9,t:'int'},{h:'Bắt đầu',w:12,t:'date'},{h:'Hết hạn',w:12,t:'date',b:1},{h:'Còn lại (ngày)',w:10,t:'int'},{h:'Trạng thái',w:15},{h:'Giá trị/tháng',w:16,t:'num'},{h:'Ghi chú',w:24}],
     rows:P.map((p,i)=>{const ps=pStatus(c,p);return[i+1,p.code,p.title,+p.qty,+p.rate,+p.months,psX(c,p),peX(c,p),ps==='bad'||ps==='tbc'?'':daysLeft(posEnd(c,p)),LBL[ps]+(p.st==='dk'?' (ngày BĐ dự kiến)':''),p.qty*p.rate,p.note]}),status:{col:9,keys:P.map(p=>pStatus(c,p))},sum:[3,10],sumLabel:2,notes:['Ngày hết hạn = Ngày bắt đầu + Thời hạn − 1 ngày.']};
@@ -1368,7 +1375,7 @@ function applyContract(){
   else[['tax','vtax'],['addr','vaddr'],['contact','vcontact'],['phone','vphone'],['email','vemail'],['bank','vbank']].forEach(([k,s])=>{if(!v[k]&&g(s))v[k]=String(g(s))});
   let c=exist;if(!c){c={id:uid(),no:d.no,status:'signed',type:TYPES[0],currency:'VND',signDate:'',start:'',end:'',value:'',bondAmt:'',bondEnd:'',owner:'',dept:'',link:'',note:'',positions:[],amendments:[]};S.contracts.push(c)}
   if(g('pr')!=='')d.pr=String(d.pr)==='365'?'365':'';
-  ['type','signDate','start','end','value','currency','pr','bondAmt','bondEnd','owner','dept','link','note'].forEach(k=>{if(g(k)!=='')c[k]=d[k]});c.vendorId=v.id;
+  ['type','signDate','start','end','value','currency','pr','bondAmt','bondEnd','owner','dept','link','note','todo'].forEach(k=>{if(g(k)!=='')c[k]=d[k]});c.vendorId=v.id;
   let add=0,upd=0;P.forEach(p=>{const m=exist&&matchPos(c,p);if(m){Object.assign(m,{title:p.title,qty:p.qty,rate:p.rate,months:p.months,start:p.start,st:p.st||'',note:p.note||m.note});upd++}else{c.positions.push({id:uid(),...p});add++}});
   if(g('amdNo')&&!c.amendments.some(a=>norm(a.no)===norm(d.amdNo)))c.amendments.push({id:uid(),no:d.amdNo,date:g('amdDate'),content:g('amdContent')||'(nhập từ file)',link:g('link')});
   log(exist?'Cập nhật HĐ từ file':'Nhập HĐ từ file',`${c.no}: thêm ${add}, cập nhật ${upd} chức danh`);save();IMP=null;go('contract',c.id);

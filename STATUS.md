@@ -20,6 +20,7 @@ Repo công khai: không ghi mật khẩu, khóa, dữ liệu hợp đồng thậ
   - Đã kiểm tra: trang tải không lỗi Console, `lineAmt`/`genLines` cho kết quả đúng ở cả 2 cách tính. Chưa kiểm tra giao diện form (cần đăng nhập).
 
 - **21/11/2026 (chiều) — tình trạng ngày bắt đầu của chức danh** (trường `st` của position, tùy chọn): `''` = thực tế; `'dk'` = dự kiến theo HĐ (vẫn tính thanh toán/dự báo, có nhãn "Dự kiến", nhắc cập nhật — chuyển cảnh báo vàng khi đã qua ngày dự kiến); `'tbc'` = chưa xác định (để trống ngày, không tính thanh toán/dự báo/ngày hết hạn HĐ, luôn nhắc bổ sung). Có trong form chức danh, nhập nhiều chức danh, nhập JSON (`"st":"dk"|"tbc"`), xuất Excel. Dữ liệu cũ không đổi.
+- **21/11/2026 (chiều, chưa push)** — bảng chức danh (và sheet Excel HĐ) sắp theo **mã chức danh** (1, 2, … 10; không mã xếp cuối) thay vì theo ngày hết hạn; cột "Còn lại" hiện "x tháng y ngày" (tháng lịch từ hôm nay đến ngày hết hạn, số ngày ở tooltip); trường hợp đồng `todo` ("Việc cần bổ sung", mỗi dòng một việc) → hiện khung vàng trong trang HĐ và cảnh báo ở Tổng quan cho đến khi xóa dòng. Nhập JSON nhận thêm `todo`.
 
 ## Lưu ý khi triển khai thay đổi mã hóa (mục 4)
 - Sau khi bản mới được push và một máy mở khóa bằng mật khẩu, file trên Drive chuyển sang 600000 vòng. **Máy đang chạy bản web cũ (còn cache) sẽ không giải mã được** file mới và báo "Sai mật khẩu" → tải lại cứng (Ctrl+Shift+R) để lấy bản mới. `sw.js` ưu tiên mạng nên thường tự cập nhật.
