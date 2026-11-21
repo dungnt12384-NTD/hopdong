@@ -4,14 +4,20 @@ Web quản lý hợp đồng & nhà thầu (một file `index.html`), chạy ở
 Repo công khai: không ghi mật khẩu, khóa, dữ liệu hợp đồng thật vào đây.
 
 ## Đang ở đâu
-- Bản `main` đang chạy thật: commit 9003dca (nhập liệu đơn giản hóa).
-- Đã soát xét code (20/11/2026) và **đã sửa trong thư mục làm việc, CHƯA commit, CHƯA push** (chờ chủ repo test trên `http://localhost:8765`):
+- Bản `main` đang chạy thật: gồm đợt bảo mật 20/11 (commit 4c6ad7d) và đợt hợp đồng khung 21/11 (mục 6–8). Đợt 21/11 được push theo yêu cầu chủ repo **khi chưa test thủ công**: vợ chủ repo sẽ kiểm tra trên máy mình rồi báo lại.
+- Đợt soát xét code 20/11/2026 (đã push trong 4c6ad7d):
   1. **SRI cho `exceljs`** (`integrity` sha384 + `crossorigin`). Mã hash tính từ chính file cdnjs 4.4.0 tại thời điểm sửa; nếu đổi phiên bản thư viện phải tính lại.
   2. **Ghi có điều kiện lên Drive**: trước khi ghi `du-lieu-hop-dong.json`, kiểm tra md5 trên Drive còn đúng bản vừa đọc (`GFile.changed`); nếu máy khác vừa ghi thì đọc lại, gộp lại rồi mới ghi. Còn khe hở rất nhỏ giữa lúc kiểm tra và lúc ghi (Drive không có ghi-có-điều-kiện thật sự cho trường hợp này).
   3. **Dọn tombstone** quá 180 ngày (`TOMB_TTL`, trong `mergeData`). Chọn 180 thay vì 90 để máy offline lâu không làm bản ghi đã xóa hiện lại.
   4. **PBKDF2 600000 vòng** cho file ghi mới; file cũ (310000 hoặc không có trường `kdf`) vẫn đọc được vì số vòng đọc theo trường `kdf` trong file. Nâng cấp tự động khi nhập mật khẩu (không áp dụng khi dùng khóa "Ghi nhớ"): lần mở khóa đầu tiên bằng mật khẩu sẽ ghi lại file với số vòng mới.
   5. **Trang kiểm thử** `test-logic.html` (gộp dữ liệu, tombstone, stamp, mã hóa, tương thích file cũ). Mở `http://localhost:8765/test-logic.html`.
 - Sao lưu trước khi sửa: `D:\github\hopdong-backup\20261120-235543_sri-etag-tomb-pbkdf2-test.zip`.
+- **21/11/2026 — hỗ trợ hợp đồng khung (đã push, chưa test thủ công)**, sao lưu `D:\github\hopdong-backup\20261121-135009_hop-dong-khung-prorate-hoantra-wro.zip`:
+  6. **Cách tính tháng lẻ theo hợp đồng** (trường `pr` của hợp đồng, mục "Thêm thông tin"): `''` = như cũ (ngày công ÷ số ngày trong tháng); `'365'` = đơn giá tháng − đơn giá × 12/365 × số ngày không làm. Lưu `pr` vào từng dòng thanh toán nên kỳ cũ không bị tính lại. Áp dụng cả mẫu bảng kê Excel (công thức) và đối chiếu file nhà thầu.
+  7. **Chi phí hoàn trả** trong ghi nhận thanh toán: mảng `ex:[{desc,amount}]` của payment; `amount` = tiền nhân sự + hoàn trả. Có trong xuất Excel chi tiết thanh toán.
+  8. **Loại phụ lục**: `kind` = `pl` (mặc định, dữ liệu cũ) / `wro` (Lệnh giao việc) / `co` (Lệnh thay đổi), thêm `value`. Bảng phụ lục hiện tổng giá trị lệnh giao việc so với giá trị HĐ.
+  - Nhập JSON hợp đồng nhận thêm trường `pr`. Dữ liệu cũ đọc bình thường (các trường mới đều tùy chọn).
+  - Đã kiểm tra: trang tải không lỗi Console, `lineAmt`/`genLines` cho kết quả đúng ở cả 2 cách tính. Chưa kiểm tra giao diện form (cần đăng nhập).
 
 ## Lưu ý khi triển khai thay đổi mã hóa (mục 4)
 - Sau khi bản mới được push và một máy mở khóa bằng mật khẩu, file trên Drive chuyển sang 600000 vòng. **Máy đang chạy bản web cũ (còn cache) sẽ không giải mã được** file mới và báo "Sai mật khẩu" → tải lại cứng (Ctrl+Shift+R) để lấy bản mới. `sw.js` ưu tiên mạng nên thường tự cập nhật.

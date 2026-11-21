@@ -550,9 +550,17 @@ function genLines(c,ym){
   const[y,m]=ym.split('-').map(Number),ms=new Date(y,m-1,1),me=new Date(y,m,0),dim=me.getDate();
   return c.positions.map(p=>{const st=parse(posStart(c,p)),en=parse(posEnd(c,p));
     const a=st>ms?st:ms,b=en<me?en:me,days=b>=a?Math.round((b-a)/DAY)+1:0;
-    const l={posId:p.id,code:p.code||'',title:p.title,rate:+p.rate||0,qtyC:+p.qty||0,qty:days?+p.qty||0:0,daysMax:days,days,dim,end:iso(en)};l.amount=lineAmt(l);return l});
+    const l={posId:p.id,code:p.code||'',title:p.title,rate:+p.rate||0,qtyC:+p.qty||0,qty:days?+p.qty||0:0,daysMax:days,days,dim,end:iso(en)};if(c.pr)l.pr=c.pr;l.amount=lineAmt(l);return l});
 }
-const lineAmt=l=>Math.round((+l.qty||0)*(+l.rate||0)*(+l.days||0)/(+l.dim||1));
+/* Cách tính tháng lẻ (trường pr của hợp đồng, lưu kèm từng dòng thanh toán):
+   ''   = theo ngày dương lịch: SL × Đơn giá × Ngày công ÷ Số ngày trong tháng (mặc định, như cũ)
+   '365'= theo hợp đồng khung PVEP: Đơn giá ngày = Đơn giá tháng × 12 ÷ 365; Thành tiền = SL × (Đơn giá tháng − Đơn giá ngày × Số ngày không làm) */
+const PR_OPTS=[['','Theo ngày dương lịch (ngày công ÷ số ngày trong tháng)'],['365','Theo năm 365 ngày (đơn giá tháng − đơn giá × 12/365 × ngày không làm)']];
+const lineAmt=l=>{const q=+l.qty||0,r=+l.rate||0,d=+l.days||0,m=+l.dim||1;
+  if(l.pr==='365'){if(d<=0)return 0;if(d>=m)return Math.round(q*r);return Math.round(q*Math.max(0,r-r*12/365*(m-d)))}
+  return Math.round(q*r*d/m)};
+const prText=pr=>pr==='365'?'Thành tiền = SL × (Đơn giá tháng − Đơn giá tháng × 12 ÷ 365 × Số ngày không làm trong tháng); làm đủ tháng = đơn giá tháng.':'Thành tiền = SL × Đơn giá × Ngày công ÷ Số ngày trong tháng.';
+const lsum=L=>(L||[]).reduce((s,x)=>s+(+x.amount||0),0);   // cộng thành tiền các dòng chức danh hoặc chi phí hoàn trả
 
 /* ===== Dữ liệu mẫu ===== */
 function sample(){
@@ -639,6 +647,7 @@ function contractFields(){return[{k:'no',label:'Số hợp đồng',req:1,ph:'H�
   {k:'end',more:1,label:'Ngày hết hạn HĐ',type:'date',hint:'Để trống = tự tính theo chức danh hết hạn muộn nhất'},
   {k:'value',more:1,money:1,label:'Giá trị hợp đồng',type:'number',hint:'Để trống = tự tính (SL × đơn giá × số tháng)'},
   {k:'currency',more:1,label:'Loại tiền',type:'select',opts:[['VND','VND'],['USD','USD']]},
+  {k:'pr',more:1,label:'Cách tính tháng làm không đủ',type:'select',opts:PR_OPTS,full:1,hint:'Hợp đồng khung PVEP (ví dụ 2026-005A) chọn "Theo năm 365 ngày"'},
   {k:'bondAmt',more:1,money:1,label:'Bảo lãnh thực hiện (số tiền)',type:'number'},{k:'bondEnd',more:1,label:'Bảo lãnh hết hạn',type:'date'},
   {k:'owner',label:'Người phụ trách'},{k:'dept',more:1,label:'Phòng ban'},
   {k:'link',more:1,label:'Đường dẫn file scan HĐ',full:1,ph:'https://...sharepoint.com/... hoặc C:\\HopDong\\HD-001.pdf'},{k:'note',more:1,label:'Ghi chú',type:'textarea',full:1}]}
@@ -705,9 +714,14 @@ function editPos(cid,pid){const c=contract(cid);const p=pid?c.positions.find(x=>
 const posSum=p=>`SL ${p.qty}; đơn giá ${fmt(p.rate)}; ${p.months} tháng${p.start?'; bắt đầu '+vn(p.start):''}`;
 function delPos(cid,pid){const c=contract(cid),p=c.positions.find(x=>x.id===pid);if(confirm('Xóa chức danh '+p.title+'?')){c.positions=c.positions.filter(x=>x.id!==pid);log('Xóa chức danh',c.no+': '+p.title,'Đã xóa: '+posSum(p));save();render()}}
 
-const AMD_F=[{k:'no',label:'Số phụ lục',req:1,ph:'PL-01'},{k:'date',label:'Ngày ký phụ lục',type:'date'},{k:'content',label:'Nội dung điều chỉnh',type:'textarea',full:1,req:1,ph:'Gia hạn 3 tháng / tăng đơn giá ... từ ngày ...'},{k:'link',label:'Đường dẫn file scan',full:1}];
-function editAmd(cid,aid){const c=contract(cid);const a=aid?c.amendments.find(x=>x.id===aid):{};
-  openForm(aid?'Sửa phụ lục':'Thêm phụ lục — '+c.no,AMD_F,a,o=>{if(o.link&&!okLink(o.link))return LINKMSG;if(aid)Object.assign(a,o);else c.amendments.push({id:uid(),...o});log(aid?'Sửa phụ lục':'Thêm phụ lục',c.no+': '+o.no,aid?DIFF:o.content)})}
+/* Loại văn bản: phụ lục (mặc định, dữ liệu cũ không có trường kind), lệnh giao việc (WRO) và lệnh thay đổi (CO) của hợp đồng khung */
+const AMD_KIND={pl:'Phụ lục',wro:'Lệnh giao việc',co:'Lệnh thay đổi'};
+const AMD_F=[{k:'kind',label:'Loại văn bản',type:'select',opts:[['pl','Phụ lục hợp đồng'],['wro','Lệnh giao việc (Work Release Order)'],['co','Lệnh thay đổi (Change Order)']]},
+  {k:'no',label:'Số phụ lục / số lệnh',req:1,ph:'PL-01 / WRO-001 / CO-01'},{k:'date',label:'Ngày ký / ngày phát hành',type:'date'},
+  {k:'value',money:1,label:'Giá trị (nếu có)',type:'number',hint:'Lệnh giao việc: giá trị ước tính của lệnh. Lệnh thay đổi: số tăng (+) hoặc giảm (−).'},
+  {k:'content',label:'Nội dung',type:'textarea',full:1,req:1,ph:'Gia hạn 3 tháng / tăng đơn giá ... / giao việc: chức danh, thời gian ...'},{k:'link',label:'Đường dẫn file scan',full:1}];
+function editAmd(cid,aid){const c=contract(cid);const a=aid?c.amendments.find(x=>x.id===aid):{kind:'pl'};
+  openForm(aid?'Sửa '+AMD_KIND[a.kind||'pl'].toLowerCase():'Thêm phụ lục / lệnh — '+c.no,AMD_F,a,o=>{if(o.link&&!okLink(o.link))return LINKMSG;if(aid)Object.assign(a,o);else c.amendments.push({id:uid(),...o});log(aid?'Sửa phụ lục':'Thêm phụ lục',c.no+': '+o.no,aid?DIFF:o.content)})}
 function delAmd(cid,aid){const c=contract(cid),a=c.amendments.find(x=>x.id===aid);if(confirm('Xóa phụ lục '+a.no+'?')){c.amendments=c.amendments.filter(x=>x.id!==aid);log('Xóa phụ lục',c.no+': '+a.no);save();render()}}
 
 /* ===== Ghi nhận thanh toán ===== */
@@ -715,7 +729,7 @@ let PAY=null;
 function editPay(pid,cid,preset){
   const ex=pid?S.payments.find(p=>p.id===pid):null;
   const t=new Date();const defYm=`${t.getFullYear()}-${pad(t.getMonth()+1)}`;
-  PAY=ex?JSON.parse(JSON.stringify(ex)):{id:null,contractId:cid||'',period:defYm,reqNo:'',invNo:'',payDate:'',note:'',lines:[],...(preset||{})};
+  PAY=ex?JSON.parse(JSON.stringify(ex)):{id:null,contractId:cid||'',period:defYm,reqNo:'',invNo:'',payDate:'',note:'',lines:[],ex:[],...(preset||{})};PAY.ex=PAY.ex||[];
   if(!ex&&!preset&&PAY.contractId)PAY.lines=genLines(contract(PAY.contractId),PAY.period);
   $('#dlg').className='wide';$('#dlgTitle').textContent=pid?'Sửa ghi nhận thanh toán':'Ghi nhận thanh toán';$('#dlgErr').textContent='';
   const opts=S.contracts.filter(c=>c.status!=='draft').map(c=>`<option value="${c.id}" ${c.id===PAY.contractId?'selected':''}>${esc(c.no)} — ${esc(vendor(c.vendorId).name)}</option>`).join('');
@@ -726,7 +740,7 @@ function editPay(pid,cid,preset){
     <label>Số hóa đơn<input id="pI" value="${esc(PAY.invNo)}"></label>
     <label>Ngày thanh toán<input type="date" id="pD" value="${PAY.payDate}"><span class="hint">Để trống = đang chờ thanh toán</span></label>
     <label>Ghi chú<input id="pN" value="${esc(PAY.note)}"></label></div>
-    <p class="muted" style="margin:12px 0 6px">Nhập <b>số người</b> và <b>số ngày công thực tế</b> theo bảng chấm công. Thành tiền = SL × Đơn giá × Ngày công ÷ Số ngày trong tháng.</p>
+    <p class="muted" style="margin:12px 0 6px">Nhập <b>số người</b> và <b>số ngày công thực tế</b> theo bảng chấm công. <span id="pHelp"></span></p>
     <div class="tbl" id="pLines"></div><div id="pWarn"></div>`;
   const regen=()=>{const c=contract($('#pC').value);PAY.contractId=$('#pC').value;PAY.period=$('#pM').value;PAY.lines=c&&PAY.period?genLines(c,PAY.period):[];drawLines()};
   $('#pC').onchange=regen;$('#pM').onchange=()=>{if(!pid||confirm('Đổi kỳ sẽ tính lại các dòng theo hợp đồng. Tiếp tục?'))regen();else $('#pM').value=PAY.period};
@@ -734,9 +748,11 @@ function editPay(pid,cid,preset){
   dlgSave=()=>{
     if(!PAY.contractId)return'Chọn hợp đồng';if(!$('#pM').value)return'Chọn kỳ thanh toán';
     if(S.payments.some(p=>p.id!==pid&&p.contractId===PAY.contractId&&p.period===$('#pM').value)&&!confirm(`Hợp đồng này ĐÃ có ghi nhận thanh toán cho kỳ ${vnm($('#pM').value)}.\nVẫn lưu thêm một bản nữa (có thể bị trùng)?`))return'Chưa lưu: nghi trùng kỳ thanh toán. Hãy sửa bản đã có thay vì thêm mới.';
-    const o={contractId:PAY.contractId,period:$('#pM').value,reqNo:$('#pR').value.trim(),invNo:$('#pI').value.trim(),payDate:$('#pD').value,note:$('#pN').value.trim(),lines:PAY.lines,amount:PAY.lines.reduce((s,l)=>s+l.amount,0)};
+    const xs=PAY.ex.map(x=>({desc:String(x.desc||'').trim(),amount:Math.round(+x.amount||0)})).filter(x=>x.desc||x.amount);
+    const bx=xs.find(x=>!x.desc||!(x.amount>0));if(bx)return'Chi phí hoàn trả: mỗi dòng cần có nội dung và số tiền lớn hơn 0';
+    const o={contractId:PAY.contractId,period:$('#pM').value,reqNo:$('#pR').value.trim(),invNo:$('#pI').value.trim(),payDate:$('#pD').value,note:$('#pN').value.trim(),lines:PAY.lines,ex:xs,amount:lsum(PAY.lines)+lsum(xs)};
     const c=contract(o.contractId);
-    if(pid){const ch=[['Số tiền',fmt(ex.amount),fmt(o.amount)],['Ngày thanh toán',vn(ex.payDate)||'(trống)',vn(o.payDate)||'(trống)'],['Số đề nghị',ex.reqNo||'(trống)',o.reqNo||'(trống)'],['Số hóa đơn',ex.invNo||'(trống)',o.invNo||'(trống)'],['Kỳ',vnm(ex.period),vnm(o.period)],['Ghi chú',ex.note||'(trống)',o.note||'(trống)']]
+    if(pid){const ch=[['Số tiền',fmt(ex.amount),fmt(o.amount)],['Chi phí hoàn trả',fmt(lsum(ex.ex)),fmt(lsum(xs))],['Ngày thanh toán',vn(ex.payDate)||'(trống)',vn(o.payDate)||'(trống)'],['Số đề nghị',ex.reqNo||'(trống)',o.reqNo||'(trống)'],['Số hóa đơn',ex.invNo||'(trống)',o.invNo||'(trống)'],['Kỳ',vnm(ex.period),vnm(o.period)],['Ghi chú',ex.note||'(trống)',o.note||'(trống)']]
         .filter(x=>x[1]!==x[2]).map(x=>`${x[0]}: ${x[1]} → ${x[2]}`);
       ex.lines.forEach((l,i)=>{const n=o.lines[i];if(n&&(l.qty!==n.qty||l.days!==n.days))ch.push(`${l.title}: ${l.qty} người × ${l.days} ngày → ${n.qty} người × ${n.days} ngày`)});
       Object.assign(ex,o);log('Sửa thanh toán',`${c.no} kỳ ${vnm(o.period)}: ${fmt(o.amount)}`,ch.join('; '))}
@@ -746,23 +762,33 @@ function editPay(pid,cid,preset){
 }
 function drawLines(){
   const c=contract(PAY.contractId);
-  if(!c){$('#pLines').innerHTML='<p class="muted">Chọn hợp đồng để hiện các chức danh.</p>';$('#pWarn').innerHTML='';return}
-  const tot=PAY.lines.reduce((s,l)=>s+l.amount,0);
+  if(!c){$('#pLines').innerHTML='<p class="muted">Chọn hợp đồng để hiện các chức danh.</p>';$('#pWarn').innerHTML='';$('#pHelp').textContent='';return}
+  $('#pHelp').textContent=prText(c.pr);
+  const tot=lsum(PAY.lines);
   $('#pLines').innerHTML=`<table><thead><tr><th>Chức danh</th><th class="n">Đơn giá</th><th class="n">SL theo HĐ</th><th class="n">SL thực tế</th><th class="n">Ngày hiệu lực</th><th class="n">Ngày công TT</th><th class="n">Ngày/tháng</th><th class="n">Thành tiền</th></tr></thead><tbody>
   ${PAY.lines.map((l,i)=>`<tr${l.daysMax?'':' style="opacity:.55"'}><td>${esc(l.title)}${l.daysMax?'':' <span class="badge b-bad">hết hạn / chưa bắt đầu</span>'}</td><td class="n">${fmt(l.rate)}</td><td class="n">${l.qtyC}</td>
     <td class="n"><input class="cell" type="number" min="0" step="1" value="${l.qty}" data-i="${i}" data-k="qty"></td><td class="n">${l.daysMax}</td>
     <td class="n"><input class="cell" type="number" min="0" step="0.5" value="${l.days}" data-i="${i}" data-k="days"></td><td class="n">${l.dim}</td><td class="n"><b id="la${i}">${fmt(l.amount)}</b></td></tr>`).join('')}
-  </tbody><tfoot><tr><td colspan="7">Tổng kỳ này</td><td class="n" id="ptot">${fmt(tot)}</td></tr></tfoot></table>`;
+  </tbody><tfoot><tr><td colspan="7">Cộng tiền nhân sự</td><td class="n" id="ptot">${fmt(tot)}</td></tr></tfoot></table>
+  <p class="muted" style="margin:12px 0 6px"><b>Chi phí hoàn trả theo thực tế</b> (công tác phí, vé máy bay, khách sạn, visa, phụ cấp offshore...) — chỉ ghi khoản có hóa đơn gốc, không cộng phí quản lý.</p>
+  <table><thead><tr><th>Nội dung</th><th class="n">Số tiền</th><th></th></tr></thead><tbody>
+  ${PAY.ex.map((x,i)=>`<tr><td><input class="xc" data-i="${i}" data-k="desc" value="${esc(x.desc||'')}" placeholder="VD: Vé máy bay HCM–Hà Nội, Le Dinh Hung, 12/10" style="width:100%;min-width:260px"></td><td class="n"><input class="xc" type="number" min="0" step="any" data-i="${i}" data-k="amount" value="${x.amount??''}" style="width:150px"></td><td><button type="button" class="sm del" onclick="exDel(${i})">Xóa</button></td></tr>`).join('')||'<tr><td colspan="3" class="muted">Không có</td></tr>'}
+  </tbody><tfoot><tr><td><button type="button" class="sm" onclick="exAdd()">+ Thêm chi phí hoàn trả</button></td><td class="n" id="xtot">${fmt(lsum(PAY.ex))}</td><td></td></tr>
+  <tr><td><b>TỔNG KỲ NÀY</b></td><td class="n"><b id="gtot">${fmt(tot+lsum(PAY.ex))}</b></td><td></td></tr></tfoot></table>`;
+  const upTot=()=>{$('#ptot').textContent=fmt(lsum(PAY.lines));$('#xtot').textContent=fmt(lsum(PAY.ex));$('#gtot').textContent=fmt(lsum(PAY.lines)+lsum(PAY.ex));payWarn()};
   $('#pLines').querySelectorAll('input.cell').forEach(inp=>inp.oninput=()=>{const l=PAY.lines[+inp.dataset.i];l[inp.dataset.k]=+inp.value||0;l.amount=lineAmt(l);
-    $('#la'+inp.dataset.i).textContent=fmt(l.amount);$('#ptot').textContent=fmt(PAY.lines.reduce((s,x)=>s+x.amount,0));payWarn()});
+    $('#la'+inp.dataset.i).textContent=fmt(l.amount);upTot()});
+  $('#pLines').querySelectorAll('input.xc').forEach(inp=>inp.oninput=()=>{const x=PAY.ex[+inp.dataset.i];x[inp.dataset.k]=inp.dataset.k==='amount'?(inp.value===''?'':+inp.value):inp.value;upTot()});
   payWarn();
 }
+function exAdd(){PAY.ex.push({desc:'',amount:''});drawLines();const L=$('#pLines').querySelectorAll('input.xc[data-k="desc"]');if(L.length)L[L.length-1].focus()}
+function exDel(i){PAY.ex.splice(i,1);drawLines()}
 function payWarn(){
   const c=contract(PAY.contractId);if(!c)return;const w=[];
   PAY.lines.forEach(l=>{if(l.qty>l.qtyC)w.push(`${l.title}: số người thực tế (${l.qty}) vượt số lượng trong HĐ (${l.qtyC}).`);
     if(l.days>l.daysMax)w.push(`${l.title}: ngày công (${l.days}) vượt số ngày còn hiệu lực trong tháng (${l.daysMax}) — có thể đã hết hạn.`)});
   const per=$('#pM').value;if(S.payments.some(p=>p.id!==PAY.id&&p.contractId===c.id&&p.period===per))w.push(`Hợp đồng đã có một lần ghi nhận thanh toán cho kỳ ${vnm(per)} — kiểm tra trùng lặp.`);
-  const others=S.payments.filter(p=>p.id!==PAY.id&&p.contractId===c.id).reduce((s,p)=>s+p.amount,0),cur=PAY.lines.reduce((s,l)=>s+l.amount,0),val=cValue(c);
+  const others=S.payments.filter(p=>p.id!==PAY.id&&p.contractId===c.id).reduce((s,p)=>s+p.amount,0),cur=lsum(PAY.lines)+lsum(PAY.ex),val=cValue(c);
   if(others+cur>val)w.push(`Tổng lũy kế (${fmt(others+cur)}) sẽ VƯỢT giá trị hợp đồng (${fmt(val)}).`);
   else if(val&&(others+cur)/val>=.9)w.push(`Lũy kế sau kỳ này đạt ${Math.round((others+cur)/val*100)}% giá trị hợp đồng.`);
   $('#pWarn').innerHTML=w.length?`<div class="warnbox">⚠ ${w.map(esc).join('<br>⚠ ')}</div>`:'';
@@ -901,7 +927,7 @@ function vContract(){
       ${kv('Còn lại',['ok','warn','wait'].includes(st)?daysLeft(end)+' ngày':'—')}${kv('Giá trị HĐ',fmt(val)+' '+c.currency+(c.value?'':' <span class="muted">(tự tính)</span>'))}
       ${kv('Đã thanh toán',`${fmt(paid)} (${val?Math.round(paid/val*100):0}%)`)}${kv('Còn lại chưa thanh toán',fmt(val-paid))}
       ${kv('Đã đề nghị nhưng chưa trả',fmt(billed-paid))}${kv('Bảo lãnh thực hiện',c.bondAmt?`${fmt(c.bondAmt)} — hết hạn ${vn(c.bondEnd)||'?'}`:'—')}
-      ${kv('Người phụ trách',esc(c.owner)||'—')}${kv('Phòng ban',esc(c.dept)||'—')}
+      ${kv('Người phụ trách',esc(c.owner)||'—')}${kv('Phòng ban',esc(c.dept)||'—')}${c.pr?kv('Tính tháng làm không đủ',esc(PR_OPTS.find(o=>o[0]===c.pr)[1])):''}
       ${kv('File hợp đồng',linkHtml(c.link))}${kv('Ghi chú',esc(c.note)||'—')}
       ${c.u?kv('Sửa lần cuối',new Date(c.u).toLocaleString('vi-VN')):''}
     </div></div>
@@ -913,15 +939,19 @@ function vContract(){
     <div class="tbl"><table><thead><tr><th>Mã</th><th>Chức danh</th><th class="n">SL</th><th class="n">Đơn giá/tháng</th><th class="n">Thời hạn</th><th>Bắt đầu</th><th>Hết hạn</th><th class="n">Còn lại</th><th>Trạng thái</th><th class="n">Giá trị</th><th>Ghi chú</th><th></th></tr></thead><tbody>
     ${c.positions.slice().sort((a,b)=>posEnd(c,a).localeCompare(posEnd(c,b))).map(p=>{const ps=pStatus(c,p);return`<tr><td>${esc(p.code)}</td><td><b>${esc(p.title)}</b></td><td class="n">${p.qty}</td><td class="n">${fmt(p.rate)}</td><td class="n">${p.months} th</td><td>${vn(posStart(c,p))}</td><td><b>${vn(posEnd(c,p))}</b></td><td class="n">${ps==='bad'?'':daysLeft(posEnd(c,p))}</td><td>${badge(ps)}</td><td class="n">${fmt(p.qty*p.rate*p.months)}</td><td class="muted">${esc(p.note)}</td>
       <td><button class="sm" onclick="editPos('${c.id}','${p.id}')">Sửa</button> <button class="sm del" onclick="delPos('${c.id}','${p.id}')">Xóa</button></td></tr>`}).join('')||'<tr><td colspan="12" class="muted">Chưa có chức danh</td></tr>'}</tbody></table></div></div>
-  <div class="card"><div class="bar"><h2>Phụ lục / điều chỉnh (${c.amendments.length})</h2><span class="muted">Khi có phụ lục: ghi lại ở đây, rồi cập nhật chức danh tương ứng.</span><div class="right"><button onclick="editAmd('${c.id}')">+ Thêm phụ lục</button></div></div>
-    <div class="tbl"><table><thead><tr><th>Số PL</th><th>Ngày</th><th>Nội dung</th><th>File</th><th></th></tr></thead><tbody>
-    ${c.amendments.map(a=>`<tr><td><b>${esc(a.no)}</b></td><td>${vn(a.date)}</td><td style="white-space:normal">${esc(a.content)}</td><td>${a.link?linkHtml(a.link):''}${(c.files||[]).filter(f=>f.aid===a.id).map(f=>`<div><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></div>`).join('')}<button class="sm" onclick="attachFiles('${c.id}','pl','${a.id}')">+ File</button></td><td><button class="sm" onclick="editAmd('${c.id}','${a.id}')">Sửa</button> <button class="sm del" onclick="delAmd('${c.id}','${a.id}')">Xóa</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">Chưa có phụ lục</td></tr>'}</tbody></table></div></div>
+  <div class="card"><div class="bar"><h2>Phụ lục / lệnh giao việc / lệnh thay đổi (${c.amendments.length})</h2><span class="muted">Ghi lại ở đây, rồi cập nhật chức danh tương ứng (nếu có).</span><div class="right"><button onclick="editAmd('${c.id}')">+ Thêm phụ lục / lệnh</button></div></div>
+    <div class="tbl"><table><thead><tr><th>Loại</th><th>Số</th><th>Ngày</th><th class="n">Giá trị</th><th>Nội dung</th><th>File</th><th></th></tr></thead><tbody>
+    ${c.amendments.map(a=>`<tr><td>${AMD_KIND[a.kind||'pl']}</td><td><b>${esc(a.no)}</b></td><td>${vn(a.date)}</td><td class="n">${a.value===''||a.value==null?'':fmt(a.value)}</td><td style="white-space:normal">${esc(a.content)}</td><td>${a.link?linkHtml(a.link):''}${(c.files||[]).filter(f=>f.aid===a.id).map(f=>`<div><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></div>`).join('')}<button class="sm" onclick="attachFiles('${c.id}','pl','${a.id}')">+ File</button></td><td><button class="sm" onclick="editAmd('${c.id}','${a.id}')">Sửa</button> <button class="sm del" onclick="delAmd('${c.id}','${a.id}')">Xóa</button></td></tr>`).join('')||'<tr><td colspan="7" class="muted">Chưa có phụ lục / lệnh</td></tr>'}</tbody>${amdFoot(c,val)}</table></div></div>
   <div class="card"><div class="bar"><h2>Lịch sử thanh toán (${pays.length})</h2><div class="right"><button class="pri" onclick="editPay(null,'${c.id}')">+ Ghi nhận thanh toán</button></div></div>
     ${payTable(pays,false)}</div>`;
 }
+/* Tổng giá trị lệnh giao việc / lệnh thay đổi so với giá trị hợp đồng (mức trần ECV của hợp đồng khung) */
+function amdFoot(c,val){const sm=k=>c.amendments.filter(a=>(a.kind||'pl')===k).reduce((s,a)=>s+(+a.value||0),0);const w=sm('wro'),co=sm('co');if(!w&&!co)return'';
+  const r=val?w/val:0,col=r>1?'#991b1b':r>=.9?'#92400e':'';
+  return`<tfoot>${w?`<tr><td colspan="3">Tổng giá trị lệnh giao việc</td><td class="n"${col?` style="color:${col}"`:''}>${fmt(w)}</td><td colspan="3">${val?`= ${Math.round(r*100)}% giá trị HĐ (${fmt(val)})${r>1?' — VƯỢT giá trị hợp đồng, cần lệnh thay đổi / phụ lục':''}`:''}</td></tr>`:''}${co?`<tr><td colspan="3">Tổng điều chỉnh theo lệnh thay đổi</td><td class="n">${fmt(co)}</td><td colspan="3" class="muted">Nhớ sửa "Giá trị hợp đồng" nếu lệnh thay đổi làm tăng/giảm giá trị.</td></tr>`:''}</tfoot>`}
 function payTable(L,showC){
   let run=0;const tt={VND:0,USD:0};const body=L.map(p=>{const c=contract(p.contractId);tt[cur(c)]+=+p.amount||0;run+=p.amount;
-    return `<tr><td><b>${vnm(p.period)}</b></td>${showC?`<td><a href="#" onclick="go('contract','${c.id}');return false">${esc(c.no)}</a></td><td>${esc(vendor(c.vendorId).name)}</td>`:''}<td>${esc(p.reqNo)}</td><td>${esc(p.invNo)}</td><td>${vn(p.payDate)}</td><td class="n"><b>${fmt(p.amount)}</b>${cur(c)==='USD'?' USD':''}</td>${showC?'':`<td class="n">${fmt(run)}</td>`}<td>${badge(p.payDate?'paid':'pending')}</td><td class="muted">${esc(p.note)}</td>
+    return `<tr><td><b>${vnm(p.period)}</b></td>${showC?`<td><a href="#" onclick="go('contract','${c.id}');return false">${esc(c.no)}</a></td><td>${esc(vendor(c.vendorId).name)}</td>`:''}<td>${esc(p.reqNo)}</td><td>${esc(p.invNo)}</td><td>${vn(p.payDate)}</td><td class="n"><b>${fmt(p.amount)}</b>${cur(c)==='USD'?' USD':''}${lsum(p.ex)?`<div class="muted" style="font-size:12px">gồm hoàn trả ${fmt(lsum(p.ex))}</div>`:''}</td>${showC?'':`<td class="n">${fmt(run)}</td>`}<td>${badge(p.payDate?'paid':'pending')}</td><td class="muted">${esc(p.note)}</td>
       <td>${p.payDate?'':`<button class="sm grn" onclick="markPaid('${p.id}')" title="Ghi nhận đã thanh toán hôm nay">✓ Đã trả</button> `}<button class="sm" onclick="editPay('${p.id}')">Sửa</button> <button class="sm del" onclick="delPay('${p.id}')">Xóa</button></td></tr>`}).join('');
   return `<div class="tbl"><table><thead><tr><th>Kỳ</th>${showC?'<th>Số HĐ</th><th>Nhà thầu</th>':''}<th>Số đề nghị</th><th>Số hóa đơn</th><th>Ngày TT</th><th class="n">Số tiền</th>${showC?'':'<th class="n">Lũy kế</th>'}<th>Trạng thái</th><th>Ghi chú</th><th></th></tr></thead>
   <tbody>${body||`<tr><td colspan="${showC?10:10}" class="muted">Chưa có thanh toán</td></tr>`}</tbody><tfoot><tr><td colspan="${showC?6:5}">Tổng cộng</td><td class="n">${fmtCur(tt)}</td><td colspan="4"></td></tr></tfoot></table></div>`;
@@ -1096,9 +1126,11 @@ const INFO_REF=()=>['Tính đến ngày:',vn(refStr())];
 
 function payLinesSheet(L,title,infos,name){
   const rows=[],muted=[],keys=[];let stt=0;
-  L.forEach(p=>{const c=contract(p.contractId);p.lines.forEach(l=>{rows.push([++stt,c.no,vendor(c.vendorId).name,l.title,l.qtyC,l.qty,l.rate,l.days,l.dim,l.amount,p.reqNo,p.invNo,p.payDate,p.payDate?'Đã thanh toán':'Chờ thanh toán']);muted.push(!l.amount);keys.push(p.payDate?'paid':'pending')})});
+  L.forEach(p=>{const c=contract(p.contractId);p.lines.forEach(l=>{rows.push([++stt,c.no,vendor(c.vendorId).name,l.title,l.qtyC,l.qty,l.rate,l.days,l.dim,l.amount,p.reqNo,p.invNo,p.payDate,p.payDate?'Đã thanh toán':'Chờ thanh toán']);muted.push(!l.amount);keys.push(p.payDate?'paid':'pending')});
+    (p.ex||[]).forEach(x=>{rows.push([++stt,c.no,vendor(c.vendorId).name,'Chi phí hoàn trả: '+x.desc,'','','','','',x.amount,p.reqNo,p.invNo,p.payDate,p.payDate?'Đã thanh toán':'Chờ thanh toán']);muted.push(false);keys.push(p.payDate?'paid':'pending')})});
+  const has365=L.some(p=>p.lines.some(l=>l.pr==='365')),hasEx=L.some(p=>(p.ex||[]).length);
   return{name,title,infos,cols:[{h:'STT',w:6,t:'int'},{h:'Số HĐ',w:17},{h:'Nhà thầu',w:28},{h:'Chức danh',w:26},{h:'SL theo HĐ',w:9,t:'int'},{h:'SL thực tế',w:9,t:'int'},{h:'Đơn giá (VND)',w:15,t:'num'},{h:'Ngày công TT',w:10,t:'int'},{h:'Ngày/tháng',w:9,t:'int'},{h:'Thành tiền (VND)',w:17,t:'num',b:1},{h:'Số đề nghị',w:18},{h:'Số hóa đơn',w:12},{h:'Ngày TT',w:12,t:'date'},{h:'Trạng thái',w:15}],
-    rows,muted,status:{col:13,keys},sum:[9],sumLabel:3,sign:true,notes:['Thành tiền = SL thực tế × Đơn giá × Ngày công thực tế ÷ Số ngày trong tháng.',...(mixedCur()?[MIXNOTE]:[])]};
+    rows,muted,status:{col:13,keys},sum:[9],sumLabel:3,sign:true,notes:['Thành tiền = SL thực tế × Đơn giá × Ngày công thực tế ÷ Số ngày trong tháng.',...(has365?['Hợp đồng tính theo năm 365 ngày: Thành tiền = SL × (Đơn giá tháng − Đơn giá tháng × 12 ÷ 365 × Số ngày không làm).']:[]),...(hasEx?['Dòng "Chi phí hoàn trả" là chi phí thực tế có hóa đơn (công tác phí...), không theo đơn giá.']:[]),...(mixedCur()?[MIXNOTE]:[])]};
 }
 function rep1(){const m=$('#r1m').value;const L=S.payments.filter(p=>p.period===m).sort((a,b)=>contract(a.contractId).no.localeCompare(contract(b.contractId).no));
   if(!L.length)return alert('Chưa có thanh toán nào được ghi nhận cho kỳ '+vnm(m));
@@ -1127,7 +1159,7 @@ function rep5(){
     rows:C.map((c,i)=>[i+1,c.no,c.type,vendor(c.vendorId).name,c.signDate,c.start,cEnd(c),cValue(c),c.currency,c.bondAmt,c.bondEnd,c.owner,c.dept,LBL[cStatus(c)],c.link,c.note]),status:{col:13,keys:C.map(cStatus)},sum:[7],sumLabel:3};
   const pr=[],pk=[];C.forEach(c=>c.positions.forEach(p=>{pr.push([c.no,p.code,p.title,+p.qty,+p.rate,+p.months,posStart(c,p),posEnd(c,p),p.qty*p.rate*p.months,LBL[pStatus(c,p)],p.note]);pk.push(pStatus(c,p))}));
   const sP={name:'Chuc danh',title:'CHI TIẾT CHỨC DANH THEO HỢP ĐỒNG',infos:[INFO_REF()],cols:[{h:'Số HĐ',w:17},{h:'Mã',w:8},{h:'Chức danh',w:28,b:1},{h:'SL',w:7,t:'int'},{h:'Đơn giá',w:15,t:'num'},{h:'Tháng',w:8,t:'int'},{h:'Bắt đầu',w:12,t:'date'},{h:'Hết hạn',w:12,t:'date',b:1},{h:'Giá trị',w:17,t:'num'},{h:'Trạng thái',w:15},{h:'Ghi chú',w:26}],rows:pr,status:{col:9,keys:pk},sum:[3,8],sumLabel:2};
-  const sA={name:'Phu luc',title:'DANH SÁCH PHỤ LỤC HỢP ĐỒNG',cols:[{h:'Số HĐ',w:17},{h:'Số PL',w:10,b:1},{h:'Ngày',w:12,t:'date'},{h:'Nội dung',w:60,wrap:1},{h:'File',w:30}],rows:C.flatMap(c=>c.amendments.map(a=>[c.no,a.no,a.date,a.content,a.link]))};
+  const sA={name:'Phu luc',title:'DANH SÁCH PHỤ LỤC / LỆNH GIAO VIỆC / LỆNH THAY ĐỔI',cols:[{h:'Số HĐ',w:17},{h:'Loại',w:15},{h:'Số',w:12,b:1},{h:'Ngày',w:12,t:'date'},{h:'Giá trị',w:17,t:'num'},{h:'Nội dung',w:60,wrap:1},{h:'File',w:30}],rows:C.flatMap(c=>c.amendments.map(a=>[c.no,AMD_KIND[a.kind||'pl'],a.no,a.date,a.value===''||a.value==null?'':+a.value,a.content,a.link]))};
   const PL=S.payments.slice().sort((a,b)=>a.period.localeCompare(b.period));
   const sT={name:'Thanh toan',title:'NHẬT KÝ THANH TOÁN',cols:[{h:'Kỳ',w:9},{h:'Số HĐ',w:17},{h:'Nhà thầu',w:28},{h:'Số đề nghị',w:18},{h:'Số hóa đơn',w:12},{h:'Ngày TT',w:12,t:'date'},{h:'Số tiền',w:17,t:'num',b:1},{h:'Trạng thái',w:15},{h:'Ghi chú',w:26}],
     rows:PL.map(p=>{const c=contract(p.contractId)||{no:'?'};return[vnm(p.period),c.no,vendor(c.vendorId).name,p.reqNo,p.invNo,p.payDate,p.amount,p.payDate?'Đã thanh toán':'Chờ thanh toán',p.note]}),status:{col:7,keys:PL.map(p=>p.payDate?'paid':'pending')},sum:[6],sumLabel:2};
@@ -1237,11 +1269,12 @@ async function tplPayBuf(c,ym){
   [4,5,6].forEach(r=>{ws.getCell(r,2).fill=xfill('FFF1F5F9')});
   const h=e+1;tplHeadRow(ws,h,['Mã vị trí','Chức danh','SL theo HĐ','Đơn giá / người / tháng','Số ngày trong tháng','SL thực tế *','Ngày công thực tế *','Thành tiền đề nghị','Ghi chú']);
   const L=genLines(c,ym).filter(l=>l.daysMax>0);let r=h;
-  L.forEach(l=>{r++;const row=ws.getRow(r);row.values=[l.code,l.title,l.qtyC,l.rate,l.dim,l.qtyC,l.daysMax,{formula:`ROUND(F${r}*D${r}*G${r}/E${r},0)`,result:l.amount},l.daysMax<l.dim?`Chỉ hiệu lực ${l.daysMax}/${l.dim} ngày (đến ${vn(l.end)})`:''];
+  const f365=c.pr==='365';
+  L.forEach(l=>{r++;const row=ws.getRow(r);row.values=[l.code,l.title,l.qtyC,l.rate,l.dim,l.qtyC,l.daysMax,{formula:f365?`ROUND(IF(G${r}<=0,0,IF(G${r}>=E${r},F${r}*D${r},F${r}*MAX(0,D${r}-D${r}*12/365*(E${r}-G${r})))),0)`:`ROUND(F${r}*D${r}*G${r}/E${r},0)`,result:l.amount},l.daysMax<l.dim?`Chỉ hiệu lực ${l.daysMax}/${l.dim} ngày (đến ${vn(l.end)})`:''];
     row.eachCell({includeEmpty:true},(x,col)=>{if(col>9)return;x.border=xbox;if(col===4||col===8)x.numFmt='#,##0';if(col===6||col===7)x.fill=xfill(YEL);else if(col<6)x.fill=xfill('FFF1F5F9');if([3,5,6,7].includes(col))x.alignment={horizontal:'center'}})});
   const tr=ws.getRow(r+1);tr.getCell(2).value='TỔNG CỘNG';tr.getCell(8).value={formula:`SUM(H${h+1}:H${r})`,result:L.reduce((s,l)=>s+l.amount,0)};tr.getCell(8).numFmt='#,##0';
   for(let col=1;col<=9;col++){const x=tr.getCell(col);x.font={bold:true};x.fill=xfill(XC.tot);x.border=xbox}
-  const nt=ws.getCell(r+3,1);nt.value='Thành tiền = SL thực tế × Đơn giá × Ngày công thực tế ÷ Số ngày trong tháng. Ngày công tính theo ngày dương lịch được thanh toán trong tháng.';nt.font={italic:true,size:9,color:{argb:'FF64748B'}};
+  const nt=ws.getCell(r+3,1);nt.value=f365?'Thành tiền = SL thực tế × (Đơn giá tháng − Đơn giá tháng × 12 ÷ 365 × (Số ngày trong tháng − Ngày công thực tế)); làm đủ tháng = đơn giá tháng. Chi phí hoàn trả (công tác phí...) kê riêng, kèm hóa đơn gốc.':'Thành tiền = SL thực tế × Đơn giá × Ngày công thực tế ÷ Số ngày trong tháng. Ngày công tính theo ngày dương lịch được thanh toán trong tháng.';nt.font={italic:true,size:9,color:{argb:'FF64748B'}};
   ['ĐẠI DIỆN NHÀ THẦU','XÁC NHẬN CỦA BỘ PHẬN SỬ DỤNG'].forEach((t,i)=>{const x=ws.getCell(r+5,i?7:2);x.value=t;x.font={bold:true};x.alignment={horizontal:'center'}});
   ws.pageSetup={orientation:'landscape',paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0};
   return wb.xlsx.writeBuffer();
@@ -1324,7 +1357,8 @@ function applyContract(){
     v={id:uid(),code,name:d.vname,tax:String(g('vtax')),addr:g('vaddr'),contact:g('vcontact'),phone:String(g('vphone')),email:g('vemail'),bank:g('vbank'),status:'active',rating:'',note:''};S.vendors.push(v);log('Thêm nhà thầu',`${v.code} - ${v.name} (nhập từ file)`)}
   else[['tax','vtax'],['addr','vaddr'],['contact','vcontact'],['phone','vphone'],['email','vemail'],['bank','vbank']].forEach(([k,s])=>{if(!v[k]&&g(s))v[k]=String(g(s))});
   let c=exist;if(!c){c={id:uid(),no:d.no,status:'signed',type:TYPES[0],currency:'VND',signDate:'',start:'',end:'',value:'',bondAmt:'',bondEnd:'',owner:'',dept:'',link:'',note:'',positions:[],amendments:[]};S.contracts.push(c)}
-  ['type','signDate','start','end','value','currency','bondAmt','bondEnd','owner','dept','link','note'].forEach(k=>{if(g(k)!=='')c[k]=d[k]});c.vendorId=v.id;
+  if(g('pr')!=='')d.pr=String(d.pr)==='365'?'365':'';
+  ['type','signDate','start','end','value','currency','pr','bondAmt','bondEnd','owner','dept','link','note'].forEach(k=>{if(g(k)!=='')c[k]=d[k]});c.vendorId=v.id;
   let add=0,upd=0;P.forEach(p=>{const m=exist&&matchPos(c,p);if(m){Object.assign(m,{title:p.title,qty:p.qty,rate:p.rate,months:p.months,start:p.start,note:p.note||m.note});upd++}else{c.positions.push({id:uid(),...p});add++}});
   if(g('amdNo')&&!c.amendments.some(a=>norm(a.no)===norm(d.amdNo)))c.amendments.push({id:uid(),no:d.amdNo,date:g('amdDate'),content:g('amdContent')||'(nhập từ file)',link:g('link')});
   log(exist?'Cập nhật HĐ từ file':'Nhập HĐ từ file',`${c.no}: thêm ${add}, cập nhật ${upd} chức danh`);save();IMP=null;go('contract',c.id);
@@ -1348,7 +1382,7 @@ function previewPay(o,rows,bad,fname){
       if(l.daysMax===0)iss.push(`Chức danh không còn hiệu lực trong kỳ (hết hạn ${vn(l.end)})`);
       else if(days>l.daysMax)iss.push(`Ngày công ${days} vượt số ngày còn hiệu lực (${l.daysMax}${l.daysMax<l.dim?', hết hạn '+vn(l.end):''})`);
       if(!(qty>0)||!(days>0))iss.push('Thiếu số người hoặc ngày công')}
-    const sysAmt=l?lineAmt({qty,rate:l.rate,days:Math.min(days,l.daysMax),dim:l.dim}):0;
+    const sysAmt=l?lineAmt({qty,rate:l.rate,days:Math.min(days,l.daysMax),dim:l.dim,pr:l.pr}):0;
     if(pos&&r.amtClaim!==''&&!Number.isNaN(r.amtClaim)&&Math.abs(r.amtClaim-sysAmt)>1&&!iss.length)iss.push(`Thành tiền đề nghị ${fmt(r.amtClaim)} ≠ hệ thống tính ${fmt(sysAmt)}`);
     return{...r,qty,days,pos,l,sysAmt,iss}});
   R.forEach(r=>{if(r.pos&&qsum[r.pos.id]>r.l.qtyC)r.iss.push(`Tổng số người (${qsum[r.pos.id]}) vượt số lượng trong HĐ (${r.l.qtyC})`)});
@@ -1378,7 +1412,7 @@ function previewPay(o,rows,bad,fname){
       :`<button class="pri" onclick="applyPay()">✔ Ghi nhận thanh toán (chờ thanh toán)</button><button onclick="payManual()">Mở để xem / chỉnh tay</button>`}
       <button onclick="IMPP=null;$('#impResult').innerHTML=''">Hủy</button></div></div>`;
 }
-function impLines(){return IMPP.R.filter(r=>r.pos).map(r=>{const l=r.l;const x={posId:l.posId,code:l.code,title:l.title,rate:l.rate,qtyC:l.qtyC,qty:r.qty,daysMax:l.daysMax,days:r.days,dim:l.dim,end:l.end};x.amount=lineAmt(x);return x})}
+function impLines(){return IMPP.R.filter(r=>r.pos).map(r=>{const l=r.l;const x={posId:l.posId,code:l.code,title:l.title,rate:l.rate,qtyC:l.qtyC,qty:r.qty,daysMax:l.daysMax,days:r.days,dim:l.dim,end:l.end};if(l.pr)x.pr=l.pr;x.amount=lineAmt(x);return x})}
 function applyPay(){
   if([...document.querySelectorAll('.vchk')].some(x=>!x.checked))return alert('Hãy kiểm tra hồ sơ giấy và tích đủ 4 mục trước khi ghi nhận.');
   const{c,ym,o,fname}=IMPP,lines=impLines(),amount=lines.reduce((s,l)=>s+l.amount,0);
