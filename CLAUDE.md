@@ -24,7 +24,7 @@ Web app cá nhân, **một file `index.html`** (HTML + CSS + JS thuần, không 
 - Có CSP trong thẻ `<meta>` ở đầu file; thêm nguồn ngoài thì phải cập nhật CSP.
 - Tự khóa sau 15 phút không thao tác (trừ máy đã chọn "Ghi nhớ").
 
-## Cách chạy thử (bắt buộc trước khi push)
+## Cách chạy thử (không bắt buộc — dùng khi cần thử kỹ)
 Chạy trong thư mục repo, rồi mở `http://localhost:8765`:
 - Windows: `powershell -ExecutionPolicy Bypass -File chay-thu.ps1` (dừng bằng Ctrl+C hoặc đóng cửa sổ)
 - Mac: `python3 -m http.server 8765 --bind 127.0.0.1`
@@ -33,8 +33,8 @@ Phải chạy lệnh **trong thư mục repo**, nếu không server sẽ phục 
 
 ## Quy trình làm việc
 1. Pull trước khi sửa (mỗi máy có một bản clone riêng: máy bàn `D:\github\hopdong`, MacBook `~/Documents/GitHub/hopdong`; **không** đặt repo trong Google Drive/OneDrive).
-2. Sửa code web → chủ repo **tự test trên `http://localhost:8765`** → khi chủ repo báo OK thì mới commit/push. Claude không tự push khi chưa được nói.
-3. **Luôn hỏi chủ repo trước khi push** (kể cả khi chạy `sync-git`), vì `main` là bản chạy thật của người dùng. Với thay đổi lớn nên dùng nhánh riêng + Pull Request. Không `push --force`, không xóa nhánh.
+2. **Sửa xong là đẩy thẳng lên bản thật** (quyết định của chủ repo ngày 21/11/2026): backup → sửa → Claude tự kiểm tra nhanh (tải trang, Console không lỗi, chạy thử hàm vừa sửa trên localhost nếu được) → commit + push lên `main` luôn, **không cần chờ chủ repo test trên localhost và không cần hỏi trước khi push**. Sau khi push: chờ GitHub Pages cập nhật, kiểm tra web thật tải được bản mới, rồi báo lại commit nào vừa lên.
+3. **Rollback khi bản mới lỗi**: chạy trong Terminal `powershell -ExecutionPolicy Bypass -File .\quay-lai.ps1` (hoàn tác commit mới nhất bằng `git revert` rồi push — lịch sử giữ nguyên, có thể làm lại); hoàn tác commit cụ thể: thêm `-Commit <mã>`. Ngoài ra còn zip ở `D:\github\hopdong-backup\`. Không `push --force`, không xóa nhánh. Thay đổi dữ liệu thật (sửa hợp đồng trong app) vẫn chỉ làm khi chủ repo yêu cầu.
 4. **Bản git chính thức duy nhất trên máy bàn công ty: `D:\github\hopdong`.** Mọi sửa đổi/commit/push làm ở đây. Không dùng `.git` trong `G:\My Drive\QuanLyHopDong`. Đồng bộ với MacBook (push lên/pull xuống) chỉ khi chủ repo nói.
 5. Windows: git của GitHub Desktop nằm ở `%LOCALAPPDATA%\GitHubDesktop\app-*\resources\app\git\cmd\git.exe` (git chưa có trong PATH).
 
@@ -45,5 +45,5 @@ Phải chạy lệnh **trong thư mục repo**, nếu không server sẽ phục 
 - **MỌI lệnh shell phải chạy trong cửa sổ Terminal của app** (`run_in_terminal`) để chủ repo nhìn thấy và kiểm soát: git (kể cả `status`, `log`, `stash`), xóa/di chuyển file, chạy script, test. **CẤM tự chạy ngầm bất kỳ lệnh nào bằng công cụ Bash/PowerShell, không có ngoại lệ** (kể cả lệnh "ngắn" hay chỉ để đọc); mọi lệnh phải hiện trên Terminal để chủ repo kiểm soát. Sau khi chạy phải mở/chỉ cho chủ repo thấy tab Terminal (panel không tự mở). Lệnh xóa hoặc phá hủy thì còn phải hỏi trước. Lệnh phải 1 dòng; việc phức tạp thì viết vào file script rồi chạy file đó. Dùng lại cùng một tab, đọc kết quả bằng `read_terminal` rồi báo cáo. Không cần chủ repo nhắc lại.
 - **Backup trước mỗi việc sửa đổi** để rollback khi lỗi: trước khi sửa bất kỳ file nào, chạy trong Terminal `powershell -ExecutionPolicy Bypass -File .\backup-truoc-sua.ps1 -Note "mo-ta-ngan"` → tạo zip ở `D:\github\hopdong-backup\` (ngoài repo, không bị push, giữ 30 bản mới nhất). Trên Mac: `bash ./backup-truoc-sua.sh "mo-ta-ngan"` (zip ở `~/Documents/GitHub/hopdong-backup/`). Khi lỗi: giải nén zip đè lại repo hoặc dùng `git checkout`/`git restore`. Không cần chủ repo nhắc lại.
 - Đồng bộ git trên Mac: `bash ./sync-git.sh "noi dung commit"` (cùng logic: commit → pull --rebase → push).
-- Đồng bộ git trên Windows: `sync-git.bat` (hoặc `powershell -ExecutionPolicy Bypass -File .\sync-git.ps1 [-Message "..."]`) = commit → pull --rebase → push. Vì script có push nên vẫn phải được chủ repo đồng ý trước khi chạy (xem Quy trình mục 3).
+- Đồng bộ git trên Windows: `sync-git.bat` (hoặc `powershell -ExecutionPolicy Bypass -File .\sync-git.ps1 [-Message "..."]`) = commit → pull --rebase → push. Theo Quy trình mục 2, Claude chạy luôn sau khi sửa, không cần hỏi.
 - Hạn chế đã biết: đính kèm tài liệu/xuất Excel vào thư mục máy chỉ có trên Chrome/Edge máy tính; không dùng offline cho dữ liệu; mỗi phiên mới cần một lần bấm đăng nhập Google sau khi hết 1 giờ hoặc đóng tab.
