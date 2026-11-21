@@ -52,7 +52,7 @@ tfoot td{font-weight:700;background:#f8fafc}
 .badge{padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600;display:inline-block}
 .b-ok{background:#dcfce7;color:#15803d}.b-warn{background:#fef3c7;color:#b45309}.b-bad{background:#fee2e2;color:#b91c1c}
 .b-wait{background:#e0e7ff;color:#3730a3}.b-draft{background:#f1f5f9;color:#475569}.b-liq{background:#ede9fe;color:#6d28d9}
-.b-info{background:#e0f2fe;color:#0369a1}.b-paid{background:#dcfce7;color:#15803d}.b-pending{background:#fef3c7;color:#b45309}
+.b-info{background:#e0f2fe;color:#0369a1}.b-tbc{background:#ffedd5;color:#c2410c}.b-dk{background:#fef9c3;color:#854d0e}.b-paid{background:#dcfce7;color:#15803d}.b-pending{background:#fef3c7;color:#b45309}
 .muted{color:var(--muted);font-size:12px}
 .alerts{list-style:none;margin:0;padding:0}
 .alerts li{padding:8px 10px;border-left:4px solid;margin-bottom:6px;border-radius:0;background:#fafafa;display:flex;gap:10px;align-items:center;cursor:pointer}
@@ -150,7 +150,7 @@ const addMonths=(d,m)=>{const r=new Date(d.getFullYear(),d.getMonth()+m,1);const
 const prevYm=ym=>{const[y,m]=ym.split('-').map(Number);const d=new Date(y,m-2,1);return `${d.getFullYear()}-${pad(d.getMonth()+1)}`};
 const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d');
 
-const LBL={ok:'Đang hiệu lực',warn:'Sắp hết hạn',bad:'Đã hết hạn',wait:'Chưa hiệu lực',draft:'Dự thảo',liq:'Đã thanh lý',paid:'Đã thanh toán',pending:'Chờ thanh toán',info:'Lưu ý'};
+const LBL={ok:'Đang hiệu lực',warn:'Sắp hết hạn',bad:'Đã hết hạn',wait:'Chưa hiệu lực',draft:'Dự thảo',liq:'Đã thanh lý',paid:'Đã thanh toán',pending:'Chờ thanh toán',info:'Lưu ý',tbc:'Chưa xác định ngày',dk:'Dự kiến'};
 const badge=k=>`<span class="badge b-${k}">${LBL[k]}</span>`;
 const TYPES=['Dịch vụ nhân lực (Manpower)','Dịch vụ kỹ thuật','Dịch vụ bảo vệ','Dịch vụ vệ sinh','Mua sắm','Khác'];
 
@@ -531,9 +531,16 @@ const MIXNOTE='Có hợp đồng USD: dòng TỔNG CỘNG cộng lẫn VND và U
 const vendor=id=>S.vendors.find(v=>v.id===id)||{name:'(chưa rõ)',code:''};
 const contract=id=>S.contracts.find(c=>c.id===id);
 
+/* Tình trạng ngày bắt đầu của chức danh (trường st): '' = thực tế (đã xác nhận, mặc định như cũ);
+   'dk' = dự kiến (theo hợp đồng, chờ số liệu thực tế) — vẫn tính bình thường nhưng có nhắc cập nhật;
+   'tbc' = chưa xác định — chưa tính thanh toán/dự báo/hết hạn cho đến khi nhập ngày. */
+const ST_OPTS=[['','Thực tế (đã xác nhận)'],['dk','Dự kiến (theo hợp đồng, chờ số liệu thực tế)'],['tbc','Chưa xác định (chưa có ngày)']];
+const isTbc=p=>p.st==='tbc';
 function posStart(c,p){return p.start||c.start}
 function posEnd(c,p){return iso(new Date(addMonths(parse(posStart(c,p)),+p.months||0).getTime()-DAY))}
-function cEnd(c){if(c.end)return c.end;const e=c.positions.map(p=>posEnd(c,p)).sort();return e.length?e[e.length-1]:c.start}
+const psX=(c,p)=>isTbc(p)?'':posStart(c,p),peX=(c,p)=>isTbc(p)?'':posEnd(c,p);   // dùng khi xuất/hiển thị: chức danh chưa xác định thì để trống
+const pStartHtml=(c,p)=>isTbc(p)?badge('tbc'):vn(posStart(c,p))+(p.st==='dk'?' '+badge('dk'):'');
+function cEnd(c){if(c.end)return c.end;const e=c.positions.filter(p=>!isTbc(p)).map(p=>posEnd(c,p)).sort();return e.length?e[e.length-1]:c.start}
 function cValue(c){return +c.value||c.positions.reduce((s,p)=>s+(+p.qty||0)*(+p.rate||0)*(+p.months||0),0)}
 function cPaid(cid){return S.payments.filter(p=>p.contractId===cid&&p.payDate).reduce((s,p)=>s+(+p.amount||0),0)}
 function cBilled(cid){return S.payments.filter(p=>p.contractId===cid).reduce((s,p)=>s+(+p.amount||0),0)}
@@ -543,14 +550,14 @@ function cStatus(c){
   const r=refD();if(r<parse(c.start))return'wait';
   const l=daysLeft(cEnd(c));if(l<0)return'bad';if(l<=S.settings.warn)return'warn';return'ok';
 }
-function pStatus(c,p){const r=refD();if(r<parse(posStart(c,p)))return'wait';const l=daysLeft(posEnd(c,p));if(l<0)return'bad';if(l<=S.settings.warn)return'warn';return'ok'}
+function pStatus(c,p){if(isTbc(p))return'tbc';const r=refD();if(r<parse(posStart(c,p)))return'wait';const l=daysLeft(posEnd(c,p));if(l<0)return'bad';if(l<=S.settings.warn)return'warn';return'ok'}
 const isActive=c=>['ok','warn'].includes(cStatus(c));
 
 function genLines(c,ym){
   const[y,m]=ym.split('-').map(Number),ms=new Date(y,m-1,1),me=new Date(y,m,0),dim=me.getDate();
   return c.positions.map(p=>{const st=parse(posStart(c,p)),en=parse(posEnd(c,p));
-    const a=st>ms?st:ms,b=en<me?en:me,days=b>=a?Math.round((b-a)/DAY)+1:0;
-    const l={posId:p.id,code:p.code||'',title:p.title,rate:+p.rate||0,qtyC:+p.qty||0,qty:days?+p.qty||0:0,daysMax:days,days,dim,end:iso(en)};if(c.pr)l.pr=c.pr;l.amount=lineAmt(l);return l});
+    const a=st>ms?st:ms,b=en<me?en:me,days=isTbc(p)?0:b>=a?Math.round((b-a)/DAY)+1:0;   // chưa xác định ngày: không tính
+    const l={posId:p.id,code:p.code||'',title:p.title,rate:+p.rate||0,qtyC:+p.qty||0,qty:days?+p.qty||0:0,daysMax:days,days,dim,end:iso(en)};if(c.pr)l.pr=c.pr;if(p.st)l.st=p.st;l.amount=lineAmt(l);return l});
 }
 /* Cách tính tháng lẻ (trường pr của hợp đồng, lưu kèm từng dòng thanh toán):
    ''   = theo ngày dương lịch: SL × Đơn giá × Ngày công ÷ Số ngày trong tháng (mặc định, như cũ)
@@ -673,21 +680,21 @@ function takeVendor(o0){const{nvName,nvTax,nvPhone,...o}=o0;if(o.vendorId!=='__n
   const v={id:uid(),code,name,tax,addr:'',contact:'',phone:String(nvPhone||'').trim(),email:'',bank:'',status:'active',rating:'',note:''};
   o.vendorId=v.id;return{o,v}}
 /* Nhập nhiều chức danh một lần (bảng, gõ liên tục, Enter/Tab sang ô kế) */
-const bpRow=()=>`<tr><td><input data-k="code" style="width:70px" placeholder="Mã"></td><td><input data-k="title" style="min-width:190px" placeholder="Chức danh"></td><td><input data-k="qty" type="number" min="0" step="any" style="width:70px" value="1"></td><td><input data-k="rate" type="number" min="0" step="any" style="width:130px" placeholder="Đơn giá/tháng"><div class="hint" style="color:#1d4ed8"></div></td><td><input data-k="months" type="number" min="0" step="any" style="width:70px"></td><td><input data-k="start" type="date"></td></tr>`;
+const bpRow=()=>`<tr><td><input data-k="code" style="width:70px" placeholder="Mã"></td><td><input data-k="title" style="min-width:190px" placeholder="Chức danh"></td><td><input data-k="qty" type="number" min="0" step="any" style="width:70px" value="1"></td><td><input data-k="rate" type="number" min="0" step="any" style="width:130px" placeholder="Đơn giá/tháng"><div class="hint" style="color:#1d4ed8"></div></td><td><input data-k="months" type="number" min="0" step="any" style="width:70px"></td><td><input data-k="start" type="date"></td><td><select data-k="st">${ST_OPTS.map(([v,t])=>`<option value="${v}">${t.split(' (')[0]}</option>`).join('')}</select></td></tr>`;
 function bpAdd(n){$('#bpb').insertAdjacentHTML('beforeend',bpRow().repeat(n||3))}
 function bulkPos(cid){const c=contract(cid);if(!c)return;
   $('#dlg').className='wide';$('#dlgTitle').textContent='Nhập các chức danh — '+c.no;$('#dlgErr').textContent='';
-  $('#dlgBody').innerHTML=`<p class="muted">Gõ mỗi chức danh một dòng; bấm Enter hoặc Tab để sang ô kế. Dòng để trống thì bỏ qua. "Ngày bắt đầu" để trống = theo ngày hiệu lực hợp đồng. Bấm "Hủy" nếu muốn nhập sau.</p>
-    <div class="tbl"><table><thead><tr><th>Mã</th><th>Chức danh *</th><th>Số lượng *</th><th>Đơn giá / người / tháng *</th><th>Thời hạn (tháng) *</th><th>Ngày bắt đầu</th></tr></thead><tbody id="bpb">${bpRow().repeat(5)}</tbody></table></div>
+  $('#dlgBody').innerHTML=`<p class="muted">Gõ mỗi chức danh một dòng; bấm Enter hoặc Tab để sang ô kế. Dòng để trống thì bỏ qua. "Ngày bắt đầu" để trống = theo ngày hiệu lực hợp đồng. Cột "Tình trạng ngày": chọn <b>Dự kiến</b> nếu ngày chỉ là ngày huy động dự kiến trong hợp đồng, <b>Chưa xác định</b> nếu hợp đồng chưa có ngày. Bấm "Hủy" nếu muốn nhập sau.</p>
+    <div class="tbl"><table><thead><tr><th>Mã</th><th>Chức danh *</th><th>Số lượng *</th><th>Đơn giá / người / tháng *</th><th>Thời hạn (tháng) *</th><th>Ngày bắt đầu</th><th>Tình trạng ngày</th></tr></thead><tbody id="bpb">${bpRow().repeat(5)}</tbody></table></div>
     <button type="button" onclick="bpAdd(3)" style="margin-top:8px">+ Thêm 3 dòng</button>`;
   const tb=$('#bpb');
   tb.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const all=[...tb.querySelectorAll('input')],i=all.indexOf(e.target);(all[i+1]||all[i]).focus()}});
   tb.addEventListener('input',e=>{if(e.target.dataset.k==='rate'){const h=e.target.nextElementSibling;h.textContent=+e.target.value>=1000?'= '+fmt(e.target.value):''}});
-  dlgSave=()=>{const rows=[...tb.querySelectorAll('tr')].map(tr=>{const g=k=>tr.querySelector(`[data-k="${k}"]`).value.trim();return{code:g('code'),title:g('title'),qty:g('qty'),rate:g('rate'),months:g('months'),start:g('start')}}).filter(r=>r.title||r.rate||r.months);
+  dlgSave=()=>{const rows=[...tb.querySelectorAll('tr')].map(tr=>{const g=k=>tr.querySelector(`[data-k="${k}"]`).value.trim();return{code:g('code'),title:g('title'),qty:g('qty'),rate:g('rate'),months:g('months'),start:g('start'),st:g('st')}}).filter(r=>r.title||r.rate||r.months);
     if(!rows.length)return'Chưa có chức danh nào để thêm';
     for(let i=0;i<rows.length;i++){const r=rows[i],n=`Dòng ${i+1}${r.title?' ('+r.title+')':''}`;
       if(!r.title)return`${n}: thiếu chức danh`;if(!(+r.qty>0))return`${n}: số lượng phải lớn hơn 0`;if(!(+r.rate>0))return`${n}: thiếu đơn giá`;if(!(+r.months>0))return`${n}: thiếu thời hạn (tháng)`}
-    rows.forEach(r=>c.positions.push({id:uid(),code:r.code,title:r.title,qty:+r.qty,rate:+r.rate,months:+r.months,start:r.start,note:''}));
+    rows.forEach(r=>c.positions.push({id:uid(),code:r.code,title:r.title,qty:+r.qty,rate:+r.rate,months:+r.months,start:r.st==='tbc'?'':r.start,...(r.st?{st:r.st}:{}),note:''}));
     log('Thêm chức danh',`${c.no}: thêm ${rows.length} chức danh (nhập nhiều)`,rows.map(r=>r.title+' — '+posSum(r)).join('; '))};
   $('#dlg').showModal();setTimeout(()=>{const f=tb.querySelector('input');if(f)f.focus()},50)}
 /* Nhân bản (gia hạn): hợp đồng mới ở trạng thái Dự thảo, hiệu lực từ ngày sau khi HĐ cũ hết hạn, chép nhà thầu + chức danh (ngày bắt đầu chức danh để trống = theo ngày hiệu lực mới). Không chép phụ lục, file đính kèm, thanh toán, bảo lãnh, giá trị nhập tay. */
@@ -699,7 +706,7 @@ function dupContract(id){const c=contract(id);
     if(o.end&&o.end<o.start)return'Ngày hết hạn phải sau ngày hiệu lực';
     if(o.link&&!okLink(o.link))return LINKMSG;
     if(r.v){S.vendors.push(r.v);log('Thêm nhà thầu',`${r.v.code} - ${r.v.name} (thêm cùng hợp đồng)`)}
-    const n={id:uid(),...o,positions:c.positions.map(p=>({id:uid(),code:p.code,title:p.title,qty:p.qty,rate:p.rate,months:p.months,start:'',note:p.note||''})),amendments:[]};
+    const n={id:uid(),...o,positions:c.positions.map(p=>({id:uid(),code:p.code,title:p.title,qty:p.qty,rate:p.rate,months:p.months,start:'',...(p.st?{st:p.st}:{}),note:p.note||''})),amendments:[]};
     S.contracts.push(n);log('Nhân bản hợp đồng',`${o.no} (từ ${c.no}), chép ${n.positions.length} chức danh`);UI.page='contract';UI.id=n.id},1);
   vendorToggle()}
 function delContract(id){const c=contract(id);const np=S.payments.filter(p=>p.contractId===id).length;
@@ -707,11 +714,12 @@ function delContract(id){const c=contract(id);const np=S.payments.filter(p=>p.co
   S.contracts=S.contracts.filter(x=>x.id!==id);S.payments=S.payments.filter(p=>p.contractId!==id);log('Xóa hợp đồng',c.no);save();UI.page='contracts';UI.id=null;render()}
 
 const POS_F=[{k:'code',label:'Mã vị trí'},{k:'title',label:'Chức danh',req:1},{k:'qty',label:'Số lượng',type:'number',req:1},{k:'rate',money:1,label:'Đơn giá / người / tháng',type:'number',req:1},
-  {k:'months',label:'Thời hạn (tháng)',type:'number',req:1},{k:'start',label:'Ngày bắt đầu',type:'date',hint:'Để trống = ngày hiệu lực HĐ'},{k:'note',label:'Ghi chú',full:1}];
+  {k:'months',label:'Thời hạn (tháng)',type:'number',req:1},{k:'start',label:'Ngày bắt đầu',type:'date',hint:'Để trống = ngày hiệu lực HĐ'},
+  {k:'st',label:'Tình trạng ngày bắt đầu',type:'select',opts:ST_OPTS,hint:'"Dự kiến": app nhắc cập nhật khi đến ngày. "Chưa xác định": chưa tính thanh toán/dự báo cho đến khi nhập ngày.'},{k:'note',label:'Ghi chú',full:1}];
 function editPos(cid,pid){const c=contract(cid);const p=pid?c.positions.find(x=>x.id===pid):{qty:1};
-  openForm(pid?'Sửa chức danh':'Thêm chức danh — '+c.no,POS_F,p,o=>{if(!(o.months>0))return'Thời hạn phải > 0';
+  openForm(pid?'Sửa chức danh':'Thêm chức danh — '+c.no,POS_F,p,o=>{if(!(o.months>0))return'Thời hạn phải > 0';if(o.st==='tbc')o.start='';
     if(pid){Object.assign(p,o);log('Sửa chức danh',c.no+': '+o.title,DIFF)}else{c.positions.push({id:uid(),...o});log('Thêm chức danh',c.no+': '+o.title,posSum(o))}})}
-const posSum=p=>`SL ${p.qty}; đơn giá ${fmt(p.rate)}; ${p.months} tháng${p.start?'; bắt đầu '+vn(p.start):''}`;
+const posSum=p=>`SL ${p.qty}; đơn giá ${fmt(p.rate)}; ${p.months} tháng${p.st==='tbc'?'; ngày bắt đầu chưa xác định':p.start?'; bắt đầu '+vn(p.start)+(p.st==='dk'?' (dự kiến)':''):''}`;
 function delPos(cid,pid){const c=contract(cid),p=c.positions.find(x=>x.id===pid);if(confirm('Xóa chức danh '+p.title+'?')){c.positions=c.positions.filter(x=>x.id!==pid);log('Xóa chức danh',c.no+': '+p.title,'Đã xóa: '+posSum(p));save();render()}}
 
 /* Loại văn bản: phụ lục (mặc định, dữ liệu cũ không có trường kind), lệnh giao việc (WRO) và lệnh thay đổi (CO) của hợp đồng khung */
@@ -766,7 +774,7 @@ function drawLines(){
   $('#pHelp').textContent=prText(c.pr);
   const tot=lsum(PAY.lines);
   $('#pLines').innerHTML=`<table><thead><tr><th>Chức danh</th><th class="n">Đơn giá</th><th class="n">SL theo HĐ</th><th class="n">SL thực tế</th><th class="n">Ngày hiệu lực</th><th class="n">Ngày công TT</th><th class="n">Ngày/tháng</th><th class="n">Thành tiền</th></tr></thead><tbody>
-  ${PAY.lines.map((l,i)=>`<tr${l.daysMax?'':' style="opacity:.55"'}><td>${esc(l.title)}${l.daysMax?'':' <span class="badge b-bad">hết hạn / chưa bắt đầu</span>'}</td><td class="n">${fmt(l.rate)}</td><td class="n">${l.qtyC}</td>
+  ${PAY.lines.map((l,i)=>`<tr${l.daysMax?'':' style="opacity:.55"'}><td>${esc(l.title)}${l.st==='tbc'?' '+badge('tbc'):l.daysMax?'':' <span class="badge b-bad">hết hạn / chưa bắt đầu</span>'}${l.st==='dk'?' <span class="badge b-dk">Ngày BĐ dự kiến</span>':''}</td><td class="n">${fmt(l.rate)}</td><td class="n">${l.qtyC}</td>
     <td class="n"><input class="cell" type="number" min="0" step="1" value="${l.qty}" data-i="${i}" data-k="qty"></td><td class="n">${l.daysMax}</td>
     <td class="n"><input class="cell" type="number" min="0" step="0.5" value="${l.days}" data-i="${i}" data-k="days"></td><td class="n">${l.dim}</td><td class="n"><b id="la${i}">${fmt(l.amount)}</b></td></tr>`).join('')}
   </tbody><tfoot><tr><td colspan="7">Cộng tiền nhân sự</td><td class="n" id="ptot">${fmt(tot)}</td></tr></tfoot></table>
@@ -806,7 +814,9 @@ function alerts(){
   for(const c of S.contracts){if(c.status==='draft'||c.status==='liq')continue;const st=cStatus(c),end=cEnd(c),l=daysLeft(end),vn_=vendor(c.vendorId).name;
     if(st==='bad')A.push({lvl:'bad',cid:c.id,t:`${c.no} (${vn_}) đã hết hạn ngày ${vn(end)} nhưng chưa thanh lý.`});
     else if(st!=='wait'&&l<=H)A.push({lvl:l<=W?'bad':l<=60?'warn':'info',cid:c.id,t:`${c.no} (${vn_}) hết hạn ngày ${vn(end)} — còn ${l} ngày. Chuẩn bị gia hạn hoặc lựa chọn nhà thầu mới.`});
-    if(st!=='bad')for(const p of c.positions){const pe=posEnd(c,p),pl=daysLeft(pe);if(pe!==end&&pl>=0&&pl<=W)A.push({lvl:'warn',cid:c.id,t:`${c.no}: chức danh "${p.title}" hết hạn ngày ${vn(pe)} (còn ${pl} ngày) — dừng thanh toán sau ngày này.`})}
+    for(const p of c.positions){if(p.st==='tbc')A.push({lvl:'warn',cid:c.id,t:`${c.no}: chức danh "${p.title}" CHƯA CÓ NGÀY BẮT ĐẦU — chưa tính vào thanh toán/dự báo. Bổ sung ngày khi có thông báo huy động.`});
+      else if(p.st==='dk'){const s=posStart(c,p);A.push(s<=refStr()?{lvl:'warn',cid:c.id,t:`${c.no}: chức danh "${p.title}" đã qua ngày bắt đầu DỰ KIẾN ${vn(s)} — cập nhật ngày bắt đầu thực tế.`}:{lvl:'info',cid:c.id,t:`${c.no}: chức danh "${p.title}" có ngày bắt đầu DỰ KIẾN ${vn(s)} — cập nhật khi có ngày thực tế.`})}}
+    if(st!=='bad')for(const p of c.positions){if(isTbc(p))continue;const pe=posEnd(c,p),pl=daysLeft(pe);if(pe!==end&&pl>=0&&pl<=W)A.push({lvl:'warn',cid:c.id,t:`${c.no}: chức danh "${p.title}" hết hạn ngày ${vn(pe)} (còn ${pl} ngày) — dừng thanh toán sau ngày này.`})}
     if(c.bondEnd){const bl=daysLeft(c.bondEnd);
       if(bl<0&&st!=='bad')A.push({lvl:'bad',cid:c.id,t:`${c.no}: bảo lãnh thực hiện đã hết hạn ngày ${vn(c.bondEnd)} trong khi HĐ còn hiệu lực.`});
       else if(bl>=0&&bl<=W)A.push({lvl:'warn',cid:c.id,t:`${c.no}: bảo lãnh thực hiện hết hạn ngày ${vn(c.bondEnd)} (còn ${bl} ngày).`});
@@ -815,7 +825,7 @@ function alerts(){
     if(r>1)A.push({lvl:'bad',cid:c.id,t:`${c.no}: tổng đề nghị/thanh toán ${fmt(b)} VƯỢT giá trị HĐ ${fmt(val)}.`});
     else if(r>=.9)A.push({lvl:'warn',cid:c.id,t:`${c.no}: đã thanh toán/đề nghị ${Math.round(r*100)}% giá trị HĐ.`});
     else if(r>=.8)A.push({lvl:'info',cid:c.id,t:`${c.no}: đã thanh toán/đề nghị ${Math.round(r*100)}% giá trị HĐ.`});
-    const activeLast=c.positions.some(p=>ymOf(posStart(c,p))<=lastYm&&ymOf(posEnd(c,p))>=lastYm);
+    const activeLast=c.positions.some(p=>!isTbc(p)&&ymOf(posStart(c,p))<=lastYm&&ymOf(posEnd(c,p))>=lastYm);
     if(activeLast&&!S.payments.some(p=>p.contractId===c.id&&p.period===lastYm))A.push({lvl:'info',cid:c.id,t:`${c.no}: chưa ghi nhận thanh toán kỳ ${vnm(lastYm)}.`});
     const fl=c.files||[];
     if(!c.link&&!fl.some(f=>f.kind==='hd'))A.push({lvl:'info',cid:c.id,t:`${c.no}: chưa đính kèm file hợp đồng (bản scan).`});
@@ -867,7 +877,7 @@ function vDash(){
   const soon=S.contracts.filter(c=>isActive(c)&&daysLeft(cEnd(c))<=H);
   const val=sumCur(act,c=>[cValue(c),c.currency]),paid=sumCur(act,c=>[cPaid(c.id),c.currency]);
   const mon=sumCur(S.payments.filter(p=>p.period===thisYm),p=>[p.amount,(contract(p.contractId)||{}).currency]);
-  const up=[];S.contracts.filter(c=>c.status!=='draft'&&c.status!=='liq').forEach(c=>c.positions.forEach(p=>{const l=daysLeft(posEnd(c,p));if(l>=0&&l<=H)up.push({c,p,l})}));up.sort((a,b)=>a.l-b.l);
+  const up=[];S.contracts.filter(c=>c.status!=='draft'&&c.status!=='liq').forEach(c=>c.positions.forEach(p=>{if(isTbc(p))return;const l=daysLeft(posEnd(c,p));if(l>=0&&l<=H)up.push({c,p,l})}));up.sort((a,b)=>a.l-b.l);
   $('#view').innerHTML=`
   ${DIR?'':`<div class="warnbox" style="margin:0 0 14px">⚠ <b>Chưa mở dữ liệu.</b> Thay đổi sẽ không được lưu.
     <button class="pri sm" style="margin-left:8px" onclick="gStart()">Đăng nhập Google</button></div>`}
@@ -937,7 +947,7 @@ function vContract(){
     ${(c.files||[]).map(f=>`<tr><td>${KINDLBL[f.kind]||f.kind}</td><td><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></td><td class="muted">${f.where==='drive'?'☁ Drive: ':'💻 Máy (cũ): '}${esc(f.sub)}${f.aid?` · ${esc((c.amendments.find(a=>a.id===f.aid)||{}).no||'')}`:''}</td><td class="n">${f.size?fsz(f.size):'—'}</td><td>${new Date(f.at).toLocaleDateString('vi-VN')}</td><td>${f.where==='drive'?`<button class="sm" title="Tải về" onclick="openAttach('${c.id}','${f.id}',true)">⬇</button> `:''}<button class="sm del" onclick="delAttach('${c.id}','${f.id}')">Gỡ</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Chưa có file đính kèm</td></tr>'}</tbody></table></div></div>
   <div class="card"><div class="bar"><h2>Chức danh (${c.positions.length})</h2><span class="muted">Ngày hết hạn = Ngày bắt đầu + Thời hạn − 1 ngày</span><div class="right"><button class="pri" onclick="bulkPos('${c.id}')">+ Nhập nhiều chức danh</button><button onclick="editPos('${c.id}')">+ Thêm 1 chức danh</button></div></div>
     <div class="tbl"><table><thead><tr><th>Mã</th><th>Chức danh</th><th class="n">SL</th><th class="n">Đơn giá/tháng</th><th class="n">Thời hạn</th><th>Bắt đầu</th><th>Hết hạn</th><th class="n">Còn lại</th><th>Trạng thái</th><th class="n">Giá trị</th><th>Ghi chú</th><th></th></tr></thead><tbody>
-    ${c.positions.slice().sort((a,b)=>posEnd(c,a).localeCompare(posEnd(c,b))).map(p=>{const ps=pStatus(c,p);return`<tr><td>${esc(p.code)}</td><td><b>${esc(p.title)}</b></td><td class="n">${p.qty}</td><td class="n">${fmt(p.rate)}</td><td class="n">${p.months} th</td><td>${vn(posStart(c,p))}</td><td><b>${vn(posEnd(c,p))}</b></td><td class="n">${ps==='bad'?'':daysLeft(posEnd(c,p))}</td><td>${badge(ps)}</td><td class="n">${fmt(p.qty*p.rate*p.months)}</td><td class="muted">${esc(p.note)}</td>
+    ${c.positions.slice().sort((a,b)=>(peX(c,a)||'9').localeCompare(peX(c,b)||'9')).map(p=>{const ps=pStatus(c,p);return`<tr><td>${esc(p.code)}</td><td><b>${esc(p.title)}</b></td><td class="n">${p.qty}</td><td class="n">${fmt(p.rate)}</td><td class="n">${p.months} th</td><td>${pStartHtml(c,p)}</td><td><b>${isTbc(p)?'—':vn(posEnd(c,p))}</b></td><td class="n">${ps==='bad'||ps==='tbc'?'':daysLeft(posEnd(c,p))}</td><td>${badge(ps)}</td><td class="n">${fmt(p.qty*p.rate*p.months)}</td><td class="muted">${esc(p.note)}</td>
       <td><button class="sm" onclick="editPos('${c.id}','${p.id}')">Sửa</button> <button class="sm del" onclick="delPos('${c.id}','${p.id}')">Xóa</button></td></tr>`}).join('')||'<tr><td colspan="12" class="muted">Chưa có chức danh</td></tr>'}</tbody></table></div></div>
   <div class="card"><div class="bar"><h2>Phụ lục / lệnh giao việc / lệnh thay đổi (${c.amendments.length})</h2><span class="muted">Ghi lại ở đây, rồi cập nhật chức danh tương ứng (nếu có).</span><div class="right"><button onclick="editAmd('${c.id}')">+ Thêm phụ lục / lệnh</button></div></div>
     <div class="tbl"><table><thead><tr><th>Loại</th><th>Số</th><th>Ngày</th><th class="n">Giá trị</th><th>Nội dung</th><th>File</th><th></th></tr></thead><tbody>
@@ -1007,7 +1017,7 @@ function vSearch(){
   $('#view').innerHTML=`<div class="card"><h2>Kết quả tìm “${esc(UI.q)}”</h2><p class="muted">${cs.length} hợp đồng · ${vs.length} nhà thầu · ${ps.length} chức danh · ${pays.length} chứng từ thanh toán</p></div>
   ${cs.length?`<div class="card"><h2>Hợp đồng</h2><div class="tbl"><table>${CHEAD}<tbody>${cs.map(contractRow).join('')}</tbody></table></div></div>`:''}
   ${vs.length?`<div class="card"><h2>Nhà thầu</h2><div class="tbl"><table><thead><tr><th>Mã</th><th>Tên</th><th>MST</th><th>Liên hệ</th><th>Điện thoại</th></tr></thead><tbody>${vs.map(v=>`<tr class="click" onclick="go('vendor','${v.id}')"><td>${esc(v.code)}</td><td><b>${esc(v.name)}</b></td><td>${esc(v.tax)}</td><td>${esc(v.contact)}</td><td>${esc(v.phone)}</td></tr>`).join('')}</tbody></table></div></div>`:''}
-  ${ps.length?`<div class="card"><h2>Chức danh</h2><div class="tbl"><table><thead><tr><th>Chức danh</th><th>Số HĐ</th><th>Nhà thầu</th><th class="n">SL</th><th class="n">Đơn giá</th><th>Hết hạn</th><th>Trạng thái</th></tr></thead><tbody>${ps.map(({c,p})=>`<tr class="click" onclick="go('contract','${c.id}')"><td><b>${esc(p.title)}</b></td><td>${esc(c.no)}</td><td>${esc(vendor(c.vendorId).name)}</td><td class="n">${p.qty}</td><td class="n">${fmt(p.rate)}</td><td>${vn(posEnd(c,p))}</td><td>${badge(pStatus(c,p))}</td></tr>`).join('')}</tbody></table></div></div>`:''}
+  ${ps.length?`<div class="card"><h2>Chức danh</h2><div class="tbl"><table><thead><tr><th>Chức danh</th><th>Số HĐ</th><th>Nhà thầu</th><th class="n">SL</th><th class="n">Đơn giá</th><th>Hết hạn</th><th>Trạng thái</th></tr></thead><tbody>${ps.map(({c,p})=>`<tr class="click" onclick="go('contract','${c.id}')"><td><b>${esc(p.title)}</b></td><td>${esc(c.no)}</td><td>${esc(vendor(c.vendorId).name)}</td><td class="n">${p.qty}</td><td class="n">${fmt(p.rate)}</td><td>${vn(peX(c,p))||'—'}</td><td>${badge(pStatus(c,p))}</td></tr>`).join('')}</tbody></table></div></div>`:''}
   ${pays.length?`<div class="card"><h2>Chứng từ thanh toán</h2>${payTable(pays,true)}</div>`:''}`;
 }
 
@@ -1081,7 +1091,7 @@ async function backup(){
 
 /* ===== Excel ===== */
 const XC={navy:'FF1E3A8A',head:'FF1E40AF',light:'FFEFF6FF',zebra:'FFF8FAFC',line:'FFB6C2D4',tot:'FFDBEAFE',
-  st:{ok:['FFDCFCE7','FF15803D'],warn:['FFFEF3C7','FFB45309'],bad:['FFFEE2E2','FFB91C1C'],wait:['FFE0E7FF','FF3730A3'],draft:['FFF1F5F9','FF475569'],liq:['FFEDE9FE','FF6D28D9'],paid:['FFDCFCE7','FF15803D'],pending:['FFFEF3C7','FFB45309'],info:['FFE0F2FE','FF0369A1']}};
+  st:{tbc:['FFFFEDD5','FFC2410C'],ok:['FFDCFCE7','FF15803D'],warn:['FFFEF3C7','FFB45309'],bad:['FFFEE2E2','FFB91C1C'],wait:['FFE0E7FF','FF3730A3'],draft:['FFF1F5F9','FF475569'],liq:['FFEDE9FE','FF6D28D9'],paid:['FFDCFCE7','FF15803D'],pending:['FFFEF3C7','FFB45309'],info:['FFE0F2FE','FF0369A1']}};
 const xd=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(Date.UTC(y,m-1,d))};
 const xfill=a=>({type:'pattern',pattern:'solid',fgColor:{argb:a}});
 const xthin={style:'thin',color:{argb:XC.line}},xbox={top:xthin,left:xthin,bottom:xthin,right:xthin};
@@ -1138,7 +1148,7 @@ function rep1(){const m=$('#r1m').value;const L=S.payments.filter(p=>p.period===
 function rep2(){const N=+$('#r2d').value||90;const rows=[],keys=[];
   S.contracts.filter(c=>c.status!=='draft'&&c.status!=='liq').forEach(c=>{const v=vendor(c.vendorId).name;
     const ce=cEnd(c),cl=daysLeft(ce);
-    c.positions.forEach(p=>{const pe=posEnd(c,p),l=daysLeft(pe);if(l<=N&&(l>=0||cl<0))rows.push([pe,l,c.no,v,p.title,+p.qty,+p.rate,ce,c.owner,LBL[pStatus(c,p)],cl<0?'HĐ đã hết hạn, chưa thanh lý':'']),keys.push(pStatus(c,p))})});
+    c.positions.forEach(p=>{if(isTbc(p))return;const pe=posEnd(c,p),l=daysLeft(pe);if(l<=N&&(l>=0||cl<0))rows.push([pe,l,c.no,v,p.title,+p.qty,+p.rate,ce,c.owner,LBL[pStatus(c,p)],cl<0?'HĐ đã hết hạn, chưa thanh lý':'']),keys.push(pStatus(c,p))})});
   const idx=rows.map((r,i)=>i).sort((a,b)=>rows[a][0].localeCompare(rows[b][0]));
   buildXlsx(`HopDong_SapHetHan_${today()}.xlsx`,[{name:'Sap het han',title:`HỢP ĐỒNG & CHỨC DANH HẾT HẠN TRONG ${N} NGÀY TỚI`,infos:[INFO_REF(),['Số dòng:',rows.length+' chức danh']],
     cols:[{h:'Ngày hết hạn',w:13,t:'date',b:1},{h:'Còn lại (ngày)',w:10,t:'int'},{h:'Số HĐ',w:17},{h:'Nhà thầu',w:28},{h:'Chức danh',w:26},{h:'SL',w:7,t:'int'},{h:'Đơn giá (VND)',w:15,t:'num'},{h:'HĐ hết hạn',w:13,t:'date'},{h:'Phụ trách',w:14},{h:'Trạng thái',w:15},{h:'Ghi chú',w:30}],
@@ -1157,7 +1167,7 @@ function rep5(){
   const C=S.contracts.slice().sort((a,b)=>a.no.localeCompare(b.no));
   const sC={name:'Hop dong',title:'SỔ THEO DÕI HỢP ĐỒNG',infos:[INFO_REF()],cols:[{h:'STT',w:6,t:'int'},{h:'Số HĐ',w:17,b:1},{h:'Loại',w:22},{h:'Nhà thầu',w:28},{h:'Ngày ký',w:12,t:'date'},{h:'Hiệu lực',w:12,t:'date'},{h:'Hết hạn',w:12,t:'date'},{h:'Giá trị',w:17,t:'num'},{h:'Tiền',w:6},{h:'Bảo lãnh',w:15,t:'num'},{h:'BL hết hạn',w:12,t:'date'},{h:'Phụ trách',w:14},{h:'Phòng ban',w:16},{h:'Trạng thái',w:15},{h:'File',w:30},{h:'Ghi chú',w:30}],
     rows:C.map((c,i)=>[i+1,c.no,c.type,vendor(c.vendorId).name,c.signDate,c.start,cEnd(c),cValue(c),c.currency,c.bondAmt,c.bondEnd,c.owner,c.dept,LBL[cStatus(c)],c.link,c.note]),status:{col:13,keys:C.map(cStatus)},sum:[7],sumLabel:3};
-  const pr=[],pk=[];C.forEach(c=>c.positions.forEach(p=>{pr.push([c.no,p.code,p.title,+p.qty,+p.rate,+p.months,posStart(c,p),posEnd(c,p),p.qty*p.rate*p.months,LBL[pStatus(c,p)],p.note]);pk.push(pStatus(c,p))}));
+  const pr=[],pk=[];C.forEach(c=>c.positions.forEach(p=>{pr.push([c.no,p.code,p.title,+p.qty,+p.rate,+p.months,psX(c,p),peX(c,p),p.qty*p.rate*p.months,LBL[pStatus(c,p)]+(p.st==='dk'?' (ngày BĐ dự kiến)':''),p.note]);pk.push(pStatus(c,p))}));
   const sP={name:'Chuc danh',title:'CHI TIẾT CHỨC DANH THEO HỢP ĐỒNG',infos:[INFO_REF()],cols:[{h:'Số HĐ',w:17},{h:'Mã',w:8},{h:'Chức danh',w:28,b:1},{h:'SL',w:7,t:'int'},{h:'Đơn giá',w:15,t:'num'},{h:'Tháng',w:8,t:'int'},{h:'Bắt đầu',w:12,t:'date'},{h:'Hết hạn',w:12,t:'date',b:1},{h:'Giá trị',w:17,t:'num'},{h:'Trạng thái',w:15},{h:'Ghi chú',w:26}],rows:pr,status:{col:9,keys:pk},sum:[3,8],sumLabel:2};
   const sA={name:'Phu luc',title:'DANH SÁCH PHỤ LỤC / LỆNH GIAO VIỆC / LỆNH THAY ĐỔI',cols:[{h:'Số HĐ',w:17},{h:'Loại',w:15},{h:'Số',w:12,b:1},{h:'Ngày',w:12,t:'date'},{h:'Giá trị',w:17,t:'num'},{h:'Nội dung',w:60,wrap:1},{h:'File',w:30}],rows:C.flatMap(c=>c.amendments.map(a=>[c.no,AMD_KIND[a.kind||'pl'],a.no,a.date,a.value===''||a.value==null?'':+a.value,a.content,a.link]))};
   const PL=S.payments.slice().sort((a,b)=>a.period.localeCompare(b.period));
@@ -1180,7 +1190,7 @@ function rep7(){
     rows:C.map(c=>[c.no,c.type,vendor(c.vendorId).code,vendor(c.vendorId).name,ST[c.status]||c.status,c.signDate,c.start,cEnd(c),cValue(c),c.currency,c.bondAmt,c.bondEnd,c.owner,c.dept,c.link,c.note])};
   const sP={name:'Chuc danh',title:'DANH MỤC CHỨC DANH THEO HỢP ĐỒNG',infos:[INFO_REF()],
     cols:[{h:'★ Số / Mã hợp đồng',w:20},{h:'★ Mã vị trí',w:12,b:1},{h:'Chức danh',w:32,b:1},{h:'SL',w:7,t:'int'},{h:'Đơn giá / người / tháng',w:20,t:'num'},{h:'Thời hạn (tháng)',w:10,t:'int'},{h:'Bắt đầu',w:12,t:'date'},{h:'Hết hạn',w:12,t:'date'},{h:'Ghi chú',w:28}],
-    rows:C.flatMap(c=>c.positions.map(p=>[c.no,p.code,p.title,p.qty,p.rate,p.months,posStart(c,p),posEnd(c,p),p.note]))};
+    rows:C.flatMap(c=>c.positions.map(p=>[c.no,p.code,p.title,p.qty,p.rate,p.months,psX(c,p),peX(c,p),p.note]))};
   buildXlsx(`DanhMuc_HopDong_NhaThau_${today()}.xlsx`,[sV,sC,sP]);log('Xuất báo cáo','Danh mục nhà thầu & hợp đồng');save()}
 let HLIST=null;
 const HG={pay:['Thanh toán','b-info'],add:['Thêm mới','b-ok'],edit:['Sửa','b-warn'],del:['Xóa','b-bad'],rep:['Xuất báo cáo','b-draft'],other:['Hệ thống','b-liq']};
@@ -1202,10 +1212,10 @@ function vHistory(){
   ['hq','hg','hf','ht'].forEach(id=>$('#'+id).oninput=draw);draw();
 }
 function repContract(cid){const c=contract(cid),v=vendor(c.vendorId),val=cValue(c),pd=cPaid(c.id);
-  const P=c.positions.slice().sort((a,b)=>posEnd(c,a).localeCompare(posEnd(c,b)));
+  const P=c.positions.slice().sort((a,b)=>(peX(c,a)||'9').localeCompare(peX(c,b)||'9'));
   const infos=[['Nhà thầu:',v.name],['Hiệu lực:',`${vn(c.start)} → ${vn(cEnd(c))}`],['Giá trị HĐ:',`${fmt(val)} ${c.currency} — đã thanh toán ${fmt(pd)} (${val?Math.round(pd/val*100):0}%)`],INFO_REF()];
   const s1={name:'Chuc danh',title:`THEO DÕI HỢP ĐỒNG ${c.no}`,infos,cols:[{h:'STT',w:6,t:'int'},{h:'Mã',w:8},{h:'Chức danh',w:28,b:1},{h:'SL',w:7,t:'int'},{h:'Đơn giá/tháng',w:15,t:'num'},{h:'Thời hạn (tháng)',w:9,t:'int'},{h:'Bắt đầu',w:12,t:'date'},{h:'Hết hạn',w:12,t:'date',b:1},{h:'Còn lại (ngày)',w:10,t:'int'},{h:'Trạng thái',w:15},{h:'Giá trị/tháng',w:16,t:'num'},{h:'Ghi chú',w:24}],
-    rows:P.map((p,i)=>{const ps=pStatus(c,p);return[i+1,p.code,p.title,+p.qty,+p.rate,+p.months,posStart(c,p),posEnd(c,p),ps==='bad'?'':daysLeft(posEnd(c,p)),LBL[ps],p.qty*p.rate,p.note]}),status:{col:9,keys:P.map(p=>pStatus(c,p))},sum:[3,10],sumLabel:2,notes:['Ngày hết hạn = Ngày bắt đầu + Thời hạn − 1 ngày.']};
+    rows:P.map((p,i)=>{const ps=pStatus(c,p);return[i+1,p.code,p.title,+p.qty,+p.rate,+p.months,psX(c,p),peX(c,p),ps==='bad'||ps==='tbc'?'':daysLeft(posEnd(c,p)),LBL[ps]+(p.st==='dk'?' (ngày BĐ dự kiến)':''),p.qty*p.rate,p.note]}),status:{col:9,keys:P.map(p=>pStatus(c,p))},sum:[3,10],sumLabel:2,notes:['Ngày hết hạn = Ngày bắt đầu + Thời hạn − 1 ngày.']};
   const PL=S.payments.filter(p=>p.contractId===cid).sort((a,b)=>a.period.localeCompare(b.period));let run=0;
   const s2={name:'Thanh toan',title:`LỊCH SỬ THANH TOÁN — ${c.no}`,infos:[['Nhà thầu:',v.name]],cols:[{h:'Kỳ',w:9},{h:'Số đề nghị',w:20},{h:'Số hóa đơn',w:12},{h:'Ngày TT',w:12,t:'date'},{h:'Số tiền',w:17,t:'num',b:1},{h:'Lũy kế',w:17,t:'num'},{h:'% giá trị HĐ',w:10,t:'pct',al:'center'},{h:'Trạng thái',w:15},{h:'Ghi chú',w:24}],
     rows:PL.map(p=>{run+=p.amount;return[vnm(p.period),p.reqNo,p.invNo,p.payDate,p.amount,run,val?run/val:0,p.payDate?'Đã thanh toán':'Chờ thanh toán',p.note]}),status:{col:7,keys:PL.map(p=>p.payDate?'paid':'pending')},sum:[4],sumLabel:1};
@@ -1323,7 +1333,7 @@ function parseContractObj(d,pos,bad){
   if(g('end')&&g('start')&&d.end<d.start)errors.push('Ngày hết hạn trước ngày hiệu lực');
   if(g('type')){const t=norm(d.type);d.type=TYPES.find(x=>norm(x).includes(t)||t.includes(norm(x.split(' (')[0])))||'Khác'}
   if(g('currency'))d.currency=String(d.currency).toUpperCase()==='USD'?'USD':'VND';
-  const P=pos.filter(p=>p.title||p.code).map((p,i)=>{const at=p._r?`dòng ${p._r}`:`chức danh ${i+1}`;const q={code:p.code||'',title:p.title||'',qty:toNum(p.qty),rate:toNum(p.rate),months:toNum(p.months),start:p.start===null?null:toDate(p.start??''),note:p.note||''};
+  const P=pos.filter(p=>p.title||p.code).map((p,i)=>{const at=p._r?`dòng ${p._r}`:`chức danh ${i+1}`;const q={code:p.code||'',title:p.title||'',qty:toNum(p.qty),rate:toNum(p.rate),months:toNum(p.months),start:p.start===null?null:toDate(p.start??''),note:p.note||''};const pst=String(p.st||'').toLowerCase();if(pst==='dk'||pst==='tbc')q.st=pst;if(q.st==='tbc')q.start='';
     if(!q.title)errors.push(`${at}: thiếu tên chức danh`);if(!(q.qty>0))errors.push(`${at} (${q.title}): số lượng không hợp lệ`);if(!(q.rate>0))errors.push(`${at} (${q.title}): đơn giá không hợp lệ`);
     if(!(q.months>0))errors.push(`${at} (${q.title}): thời hạn (tháng) không hợp lệ`);if(q.start===null){errors.push(`${at} (${q.title}): ngày bắt đầu không hợp lệ`);q.start=''}
     if(q.start&&g('start')&&q.start<d.start)warns.push(`${q.title}: ngày bắt đầu (${vn(q.start)}) trước ngày hiệu lực hợp đồng`);return q});
@@ -1346,7 +1356,7 @@ function previewContract(R,fname){
     <div class="grid2">${kv('Số hợp đồng',esc(d.no))}${kv('Loại',esc(d.type))}${kv('Nhà thầu',esc(d.vname))}${kv('Mã số thuế',esc(d.vtax))}${kv('Ngày ký',vn(d.signDate))}${kv('Ngày hiệu lực',vn(d.start))}
       ${kv('Ngày hết hạn',vn(d.end))}${kv('Giá trị HĐ',d.value?fmt(d.value):'')}${kv('Bảo lãnh',d.bondAmt?fmt(d.bondAmt)+' — đến '+vn(d.bondEnd):'')}${kv('Phụ trách',esc(d.owner))}${kv('Phòng ban',esc(d.dept))}${kv('Phụ lục',d.amdNo?esc(d.amdNo)+': '+esc(d.amdContent):'')}</div>
     <div class="tbl" style="margin-top:10px"><table><thead><tr><th>Mã</th><th>Chức danh</th><th class="n">SL</th><th class="n">Đơn giá/tháng</th><th class="n">Thời hạn</th><th>Bắt đầu</th><th>Hết hạn (tự tính)</th><th>${exist?'Thao tác':''}</th></tr></thead><tbody>
-    ${P.map(p=>{const ok=p.months>0&&d.start;const m=exist&&matchPos(exist,p);return`<tr><td>${esc(p.code)}</td><td><b>${esc(p.title)}</b></td><td class="n">${p.qty||''}</td><td class="n">${fmt(p.rate)}</td><td class="n">${p.months||''} th</td><td>${vn(p.start||d.start)}</td><td><b>${ok?vn(posEnd(c0,{...p,start:p.start||d.start})):'?'}</b></td><td>${exist?(m?'<span class="badge b-warn">Cập nhật</span>':'<span class="badge b-ok">Thêm mới</span>'):''}</td></tr>`}).join('')||'<tr><td colspan="8" class="muted">Không có chức danh</td></tr>'}</tbody></table></div>
+    ${P.map(p=>{const ok=p.months>0&&d.start;const m=exist&&matchPos(exist,p);return`<tr><td>${esc(p.code)}</td><td><b>${esc(p.title)}</b></td><td class="n">${p.qty||''}</td><td class="n">${fmt(p.rate)}</td><td class="n">${p.months||''} th</td><td>${pStartHtml(c0,{...p,start:p.start||d.start})}</td><td><b>${isTbc(p)?'—':ok?vn(posEnd(c0,{...p,start:p.start||d.start})):'?'}</b></td><td>${exist?(m?'<span class="badge b-warn">Cập nhật</span>':'<span class="badge b-ok">Thêm mới</span>'):''}</td></tr>`}).join('')||'<tr><td colspan="8" class="muted">Không có chức danh</td></tr>'}</tbody></table></div>
     <div class="bar" style="margin-top:12px"><button class="pri" ${errors.length?'disabled style="opacity:.5"':''} onclick="applyContract()">✔ Xác nhận nhập vào hệ thống</button><button onclick="IMP=null;$('#impResult').innerHTML=''">Hủy</button>
     <span class="muted">Hãy đối chiếu nhanh với bản hợp đồng đã ký trước khi xác nhận.</span></div></div>`;
 }
@@ -1359,7 +1369,7 @@ function applyContract(){
   let c=exist;if(!c){c={id:uid(),no:d.no,status:'signed',type:TYPES[0],currency:'VND',signDate:'',start:'',end:'',value:'',bondAmt:'',bondEnd:'',owner:'',dept:'',link:'',note:'',positions:[],amendments:[]};S.contracts.push(c)}
   if(g('pr')!=='')d.pr=String(d.pr)==='365'?'365':'';
   ['type','signDate','start','end','value','currency','pr','bondAmt','bondEnd','owner','dept','link','note'].forEach(k=>{if(g(k)!=='')c[k]=d[k]});c.vendorId=v.id;
-  let add=0,upd=0;P.forEach(p=>{const m=exist&&matchPos(c,p);if(m){Object.assign(m,{title:p.title,qty:p.qty,rate:p.rate,months:p.months,start:p.start,note:p.note||m.note});upd++}else{c.positions.push({id:uid(),...p});add++}});
+  let add=0,upd=0;P.forEach(p=>{const m=exist&&matchPos(c,p);if(m){Object.assign(m,{title:p.title,qty:p.qty,rate:p.rate,months:p.months,start:p.start,st:p.st||'',note:p.note||m.note});upd++}else{c.positions.push({id:uid(),...p});add++}});
   if(g('amdNo')&&!c.amendments.some(a=>norm(a.no)===norm(d.amdNo)))c.amendments.push({id:uid(),no:d.amdNo,date:g('amdDate'),content:g('amdContent')||'(nhập từ file)',link:g('link')});
   log(exist?'Cập nhật HĐ từ file':'Nhập HĐ từ file',`${c.no}: thêm ${add}, cập nhật ${upd} chức danh`);save();IMP=null;go('contract',c.id);
 }

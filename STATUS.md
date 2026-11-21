@@ -19,6 +19,8 @@ Repo công khai: không ghi mật khẩu, khóa, dữ liệu hợp đồng thậ
   - Nhập JSON hợp đồng nhận thêm trường `pr`. Dữ liệu cũ đọc bình thường (các trường mới đều tùy chọn).
   - Đã kiểm tra: trang tải không lỗi Console, `lineAmt`/`genLines` cho kết quả đúng ở cả 2 cách tính. Chưa kiểm tra giao diện form (cần đăng nhập).
 
+- **21/11/2026 (chiều) — tình trạng ngày bắt đầu của chức danh** (trường `st` của position, tùy chọn): `''` = thực tế; `'dk'` = dự kiến theo HĐ (vẫn tính thanh toán/dự báo, có nhãn "Dự kiến", nhắc cập nhật — chuyển cảnh báo vàng khi đã qua ngày dự kiến); `'tbc'` = chưa xác định (để trống ngày, không tính thanh toán/dự báo/ngày hết hạn HĐ, luôn nhắc bổ sung). Có trong form chức danh, nhập nhiều chức danh, nhập JSON (`"st":"dk"|"tbc"`), xuất Excel. Dữ liệu cũ không đổi.
+
 ## Lưu ý khi triển khai thay đổi mã hóa (mục 4)
 - Sau khi bản mới được push và một máy mở khóa bằng mật khẩu, file trên Drive chuyển sang 600000 vòng. **Máy đang chạy bản web cũ (còn cache) sẽ không giải mã được** file mới và báo "Sai mật khẩu" → tải lại cứng (Ctrl+Shift+R) để lấy bản mới. `sw.js` ưu tiên mạng nên thường tự cập nhật.
 - Máy đã "Ghi nhớ" khóa sẽ bị hỏi lại mật khẩu một lần sau khi file được nâng cấp.
