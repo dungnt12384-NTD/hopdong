@@ -78,6 +78,9 @@ dialog h3{margin:0 0 12px}
 .rep .card{margin:0;display:flex;flex-direction:column;gap:8px}
 .rep p{margin:0;color:var(--muted);font-size:13px;flex:1}
 input.cell{width:70px;text-align:right;padding:3px 6px}
+.dmy{position:relative;display:inline-flex;gap:4px;align-items:stretch;min-width:0}.fgrid .dmy{display:flex}
+.dmy input[type=text]{width:9.5em;min-width:0;flex:1}.dmy input.bad{border-color:#dc2626;background:#fef2f2}
+.dmy .dmyb{padding:2px 7px}.dmy input[data-dmy]{position:absolute;right:0;bottom:0;width:1px;height:1px;padding:0;border:0;opacity:0;pointer-events:none}
 a{color:#1d4ed8}
 #toast{position:fixed;right:18px;bottom:18px;max-width:420px;padding:10px 16px;border-radius:8px;color:#fff;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;z-index:200}
 #toast.show{opacity:1;transform:none}#toast.ok{background:#15803d}#toast.warn{background:#b45309}#toast.err{background:#b91c1c}
@@ -137,8 +140,9 @@ const $=s=>document.querySelector(s);
 const pad=n=>String(n).padStart(2,'0');
 const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const parse=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
-const vn=s=>s?s.split('-').reverse().join('/'):'';
-const vnm=ym=>ym?ym.split('-').reverse().join('/'):'';
+const vn=s=>s?s.split('-').reverse().join('-'):'';   // hiển thị ngày dd-mm-yyyy (dữ liệu lưu yyyy-mm-dd)
+const vnm=ym=>ym?ym.split('-').reverse().join('-'):'';   // kỳ mm-yyyy
+const vnDT=t=>{const d=new Date(t);return`${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`};   // ngày giờ dd-mm-yyyy hh:mm
 const fmt=n=>Math.round(+n||0).toLocaleString('vi-VN');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -162,6 +166,40 @@ function save(){stamp();
   saveSeq++;if(DIR)setTimeout(syncNow,0);else toast('CHƯA mở file dữ liệu — thay đổi này chưa được lưu vào file!','err')}
 function toast(msg,kind){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t)}
   t.textContent=msg;t.className='show '+(kind||'ok');clearTimeout(t._h);t._h=setTimeout(()=>t.className='',kind==='err'?8000:2600)}
+
+/* ===== Ô nhập ngày cố định dd-mm-yyyy (tháng: mm-yyyy) =====
+   Ô date/month gốc của trình duyệt hiện theo ngôn ngữ máy (có máy ra mm/dd/yyyy → dễ nhập nhầm ngày/tháng).
+   Giữ ô gốc (ẩn) để code đọc/ghi .value dạng ISO yyyy-mm-dd như cũ; thêm ô chữ dd-mm-yyyy + nút 📅 mở lịch. */
+const DMY={
+  show:(v,m)=>{if(!v)return'';const p=v.split('-');return m?`${p[1]}-${p[0]}`:`${p[2]}-${p[1]}-${p[0]}`},
+  read(s,m){s=s.trim();if(!s)return'';let a=s.split(/\D+/).filter(Boolean);
+    if(a.length===1){const x=a[0];a=m?(x.length===6?[x.slice(0,2),x.slice(2)]:[]):(x.length===8||x.length===6?[x.slice(0,2),x.slice(2,4),x.slice(4)]:[])}
+    if(a[0]&&a[0].length===4&&a.length===(m?2:3))a=a.slice(1).reverse().concat(a[0]);   // chấp nhận cả yyyy-mm-dd dán từ nơi khác
+    const n=a.map(Number);if(n.length!==(m?2:3))return null;let y=n[n.length-1];if(y<100)y+=2000;if(y<1900||y>2200)return null;
+    if(m)return n[0]>=1&&n[0]<=12?`${y}-${pad(n[0])}`:null;
+    const t=new Date(y,n[1]-1,n[0]);return t.getFullYear()===y&&t.getMonth()===n[1]-1&&t.getDate()===n[0]?iso(t):null}
+};
+const DMY_P=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+function dmyOne(d){
+  const m=d.type==='month';d.dataset.dmy=1;d.tabIndex=-1;
+  const w=document.createElement('span');w.className='dmy';d.parentNode.insertBefore(w,d);
+  const t=document.createElement('input');t.type='text';t.inputMode='numeric';t.autocomplete='off';t.placeholder=m?'mm-yyyy':'dd-mm-yyyy';t.maxLength=m?7:10;t.title='Nhập theo dạng '+t.placeholder+' (ví dụ '+(m?'11-2026':'21-11-2026')+')';
+  const b=document.createElement('button');b.type='button';b.className='dmyb';b.tabIndex=-1;b.title='Chọn trên lịch';b.textContent='📅';
+  w.append(t,b,d);
+  const sync=()=>{t.value=DMY.show(DMY_P.get.call(d),m);t.classList.remove('bad')};
+  Object.defineProperty(d,'value',{configurable:true,get(){return DMY_P.get.call(d)},set(v){DMY_P.set.call(d,v);sync()}});   // code gán .value → ô chữ tự cập nhật
+  sync();d.addEventListener('change',sync);
+  const commit=()=>{const v=DMY.read(t.value,m);
+    if(v===null){t.classList.add('bad');toast(`Ngày "${t.value}" không hợp lệ — nhập theo dạng ${t.placeholder}. Đã trả lại giá trị cũ.`,'err');sync();return}
+    if(v!==DMY_P.get.call(d)){DMY_P.set.call(d,v);d.dispatchEvent(new Event('input',{bubbles:true}));d.dispatchEvent(new Event('change',{bubbles:true}))}sync()};
+  t.addEventListener('change',commit);
+  t.addEventListener('keydown',e=>{if(e.key==='Enter')commit()});
+  t.addEventListener('input',e=>{if(e.inputType==='insertText'&&(m?/^\d{2}$/:/^(\d{2}|\d{2}-\d{2})$/).test(t.value))t.value+='-'});   // tự thêm dấu "-" khi gõ số
+  b.addEventListener('click',()=>{try{d.showPicker()}catch(_){t.focus()}});
+}
+function dmyEnhance(n){if(n.nodeType!==1)return;const q='input[type=date]:not([data-dmy]),input[type=month]:not([data-dmy])';if(n.matches(q))dmyOne(n);n.querySelectorAll(q).forEach(dmyOne)}
+dmyEnhance(document.body);
+new MutationObserver(ms=>ms.forEach(r=>r.addedNodes.forEach(dmyEnhance))).observe(document.body,{childList:true,subtree:true});
 window.addEventListener('beforeunload',e=>{if(DIR&&saveSeq>savedSeq){e.preventDefault();e.returnValue=''}});
 function log(action,text,detail){S.log.unshift({t:new Date().toISOString(),action,text,detail:detail||'',by:ME});S.log=S.log.slice(0,5000)}
 
@@ -694,7 +732,7 @@ function bulkPos(cid){const c=contract(cid);if(!c)return;
     <div class="tbl"><table><thead><tr><th>Mã</th><th>Chức danh *</th><th>Số lượng *</th><th>Đơn giá / người / tháng *</th><th>Thời hạn (tháng) *</th><th>Ngày bắt đầu</th><th>Tình trạng ngày</th></tr></thead><tbody id="bpb">${bpRow().repeat(5)}</tbody></table></div>
     <button type="button" onclick="bpAdd(3)" style="margin-top:8px">+ Thêm 3 dòng</button>`;
   const tb=$('#bpb');
-  tb.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const all=[...tb.querySelectorAll('input')],i=all.indexOf(e.target);(all[i+1]||all[i]).focus()}});
+  tb.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const all=[...tb.querySelectorAll('input:not([data-dmy])')],i=all.indexOf(e.target);(all[i+1]||all[i]).focus()}});
   tb.addEventListener('input',e=>{if(e.target.dataset.k==='rate'){const h=e.target.nextElementSibling;h.textContent=+e.target.value>=1000?'= '+fmt(e.target.value):''}});
   dlgSave=()=>{const rows=[...tb.querySelectorAll('tr')].map(tr=>{const g=k=>tr.querySelector(`[data-k="${k}"]`).value.trim();return{code:g('code'),title:g('title'),qty:g('qty'),rate:g('rate'),months:g('months'),start:g('start'),st:g('st')}}).filter(r=>r.title||r.rate||r.months);
     if(!rows.length)return'Chưa có chức danh nào để thêm';
@@ -946,12 +984,12 @@ function vContract(){
       ${kv('Đã đề nghị nhưng chưa trả',fmt(billed-paid))}${kv('Bảo lãnh thực hiện',c.bondAmt?`${fmt(c.bondAmt)} — hết hạn ${vn(c.bondEnd)||'?'}`:'—')}
       ${kv('Người phụ trách',esc(c.owner)||'—')}${kv('Phòng ban',esc(c.dept)||'—')}${c.pr?kv('Tính tháng làm không đủ',esc(PR_OPTS.find(o=>o[0]===c.pr)[1])):''}
       ${kv('File hợp đồng',linkHtml(c.link))}${kv('Ghi chú',esc(c.note)||'—')}
-      ${c.u?kv('Sửa lần cuối',new Date(c.u).toLocaleString('vi-VN')):''}
+      ${c.u?kv('Sửa lần cuối',vnDT(c.u)):''}
     </div>${todoList(c).length?`<div class="warnbox" style="margin-top:10px"><b>📝 Việc cần bổ sung</b> <span class="muted">(bấm Sửa để cập nhật; xóa dòng khi đã xong)</span><br>• ${todoList(c).map(esc).join('<br>• ')}</div>`:''}</div>
   <div class="card"><div class="bar"><h2>📎 Tài liệu đính kèm (${(c.files||[]).length})</h2><span class="muted">File được lưu trên Google Drive (thư mục TaiLieu/${esc(safeName(c.no))}), mở được trên mọi thiết bị</span><div class="right"><button onclick="attachFiles('${c.id}','hd')">+ File hợp đồng</button><button onclick="attachFiles('${c.id}','tt')">+ Hồ sơ thanh toán</button></div></div>
     <p class="hint" style="margin:0 0 8px">⚠ Giới hạn <b>25 MB mỗi file</b> (file lớn hơn sẽ bị từ chối, không file nào được tải lên). Chỉ nhận <b>PDF, ảnh (JPG, PNG, GIF, WEBP, HEIC), Word, Excel, PowerPoint, TXT, CSV, ZIP</b>; PDF và ảnh mở xem trực tiếp, các loại khác sẽ được tải về. Nên dùng PDF nén hoặc ảnh giảm độ phân giải. Dung lượng file tính vào bộ nhớ Google Drive của tài khoản (15 GB miễn phí).${(c.files||[]).some(f=>f.size)?` Tổng dung lượng file đính kèm của hợp đồng này: <b>${fsz((c.files||[]).reduce((s,f)=>s+(f.size||0),0))}</b>.`:''}</p>
     <div class="tbl"><table><thead><tr><th>Loại</th><th>File</th><th>Nằm trong</th><th class="n">Dung lượng</th><th>Ngày đính kèm</th><th></th></tr></thead><tbody>
-    ${(c.files||[]).map(f=>`<tr><td>${KINDLBL[f.kind]||f.kind}</td><td><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></td><td class="muted">${f.where==='drive'?'☁ Drive: ':'💻 Máy (cũ): '}${esc(f.sub)}${f.aid?` · ${esc((c.amendments.find(a=>a.id===f.aid)||{}).no||'')}`:''}</td><td class="n">${f.size?fsz(f.size):'—'}</td><td>${new Date(f.at).toLocaleDateString('vi-VN')}</td><td>${f.where==='drive'?`<button class="sm" title="Tải về" onclick="openAttach('${c.id}','${f.id}',true)">⬇</button> `:''}<button class="sm del" onclick="delAttach('${c.id}','${f.id}')">Gỡ</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Chưa có file đính kèm</td></tr>'}</tbody></table></div></div>
+    ${(c.files||[]).map(f=>`<tr><td>${KINDLBL[f.kind]||f.kind}</td><td><a href="#" onclick="openAttach('${c.id}','${f.id}');return false">📄 ${esc(f.name)}</a></td><td class="muted">${f.where==='drive'?'☁ Drive: ':'💻 Máy (cũ): '}${esc(f.sub)}${f.aid?` · ${esc((c.amendments.find(a=>a.id===f.aid)||{}).no||'')}`:''}</td><td class="n">${f.size?fsz(f.size):'—'}</td><td>${vnDT(f.at).slice(0,10)}</td><td>${f.where==='drive'?`<button class="sm" title="Tải về" onclick="openAttach('${c.id}','${f.id}',true)">⬇</button> `:''}<button class="sm del" onclick="delAttach('${c.id}','${f.id}')">Gỡ</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Chưa có file đính kèm</td></tr>'}</tbody></table></div></div>
   <div class="card"><div class="bar"><h2>Chức danh (${c.positions.length})</h2><span class="muted">Ngày hết hạn = Ngày bắt đầu + Thời hạn − 1 ngày</span><div class="right"><button class="pri" onclick="bulkPos('${c.id}')">+ Nhập nhiều chức danh</button><button onclick="editPos('${c.id}')">+ Thêm 1 chức danh</button></div></div>
     <div class="tbl"><table><thead><tr><th>Mã</th><th>Chức danh</th><th class="n">SL</th><th class="n">Đơn giá/tháng</th><th class="n">Thời hạn</th><th>Bắt đầu</th><th>Hết hạn</th><th class="n">Còn lại</th><th>Trạng thái</th><th class="n">Giá trị</th><th>Ghi chú</th><th></th></tr></thead><tbody>
     ${c.positions.slice().sort(byCode).map(p=>{const ps=pStatus(c,p);return`<tr><td>${esc(p.code)}</td><td><b>${esc(p.title)}</b></td><td class="n">${p.qty}</td><td class="n">${fmt(p.rate)}</td><td class="n">${p.months} th</td><td>${pStartHtml(c,p)}</td><td><b>${isTbc(p)?'—':vn(posEnd(c,p))}</b></td><td class="n" title="${ps==='bad'||ps==='tbc'?'':daysLeft(posEnd(c,p))+' ngày'}">${ps==='bad'||ps==='tbc'?'':remTxt(posEnd(c,p))}</td><td>${badge(ps)}</td><td class="n">${fmt(p.qty*p.rate*p.months)}</td><td class="muted">${esc(p.note)}</td>
@@ -1078,7 +1116,7 @@ function vSettings(){
     <div class="bar"><label class="muted">Tự động sao lưu <select id="bkEvery">${[[0,'Tắt'],[15,'Mỗi 15 phút'],[30,'Mỗi 30 phút'],[60,'Mỗi 1 giờ'],[180,'Mỗi 3 giờ'],[360,'Mỗi 6 giờ'],[720,'Mỗi 12 giờ'],[1440,'Mỗi ngày'],[10080,'Mỗi tuần']].map(([v,l])=>`<option value="${v}" ${BK.every===v?'selected':''}>${l}</option>`).join('')}</select></label>
       <label class="muted">Giữ tối đa <input type="number" id="bkKeep" min="0" value="${BK.keep}" style="width:70px"> bản (0 = giữ tất cả)</label>
       <button class="pri" onclick="bkSet()">Lưu lịch</button></div>
-    <p class="muted">Lần sao lưu gần nhất: <b>${BK.last?new Date(BK.last).toLocaleString('vi-VN'):'chưa sao lưu'}</b>. Tự sao lưu chỉ chạy khi trang đang mở, và chỉ khi dữ liệu có thay đổi kể từ lần trước. Trình duyệt chỉ cho biết tên thư mục, không hiện đường dẫn đầy đủ. Khi bật "Giữ tối đa", các file <code>saoluu-*.json</code> cũ nhất trong thư mục sao lưu sẽ bị xóa.</p>
+    <p class="muted">Lần sao lưu gần nhất: <b>${BK.last?vnDT(BK.last):'chưa sao lưu'}</b>. Tự sao lưu chỉ chạy khi trang đang mở, và chỉ khi dữ liệu có thay đổi kể từ lần trước. Trình duyệt chỉ cho biết tên thư mục, không hiện đường dẫn đầy đủ. Khi bật "Giữ tối đa", các file <code>saoluu-*.json</code> cũ nhất trong thư mục sao lưu sẽ bị xóa.</p>
     <div class="bar"><button class="pri" onclick="backup()">⬇ Sao lưu ngay</button><button onclick="$('#rf').click()">Khôi phục từ file</button><input type="file" id="rf" accept=".json" hidden></div></div>
   ${IS_LOCAL?`<div class="card"><h2>Dữ liệu (chỉ hiện khi chạy thử trên máy)</h2><div class="bar"><button onclick="loadSample()">Nạp dữ liệu mẫu</button>
     <button class="del" onclick="wipeAll()">Xóa toàn bộ, bắt đầu nhập thật</button></div></div>`:''}`;
@@ -1118,7 +1156,7 @@ async function buildXlsx(fname,sheets,cat='bc'){
       sh.cols.forEach((col,j)=>{let v=row[j];const cell=r.getCell(j+1);
         if(col.t==='date')v=v?xd(v):null;else if(['num','int','pct'].includes(col.t))v=(v===''||v==null)?null:+v;
         cell.value=v;cell.border=xbox;cell.alignment={vertical:'middle',wrapText:!!col.wrap,horizontal:col.al||(col.t==='date'||col.t==='int'?'center':undefined)};
-        if(col.t==='num')cell.numFmt='#,##0';if(col.t==='date')cell.numFmt='dd/mm/yyyy';if(col.t==='pct')cell.numFmt='0%';
+        if(col.t==='num')cell.numFmt='#,##0';if(col.t==='date')cell.numFmt='dd-mm-yyyy';if(col.t==='pct')cell.numFmt='0%';
         if(i%2)cell.fill=xfill(XC.zebra);if(col.b)cell.font={bold:true};
         if(sh.muted&&sh.muted[i])cell.font={italic:true,color:{argb:'FF94A3B8'}}});
       if(sh.status){const k=sh.status.keys[i],cell=r.getCell(sh.status.col+1);if(XC.st[k]){cell.fill=xfill(XC.st[k][0]);cell.font={bold:true,color:{argb:XC.st[k][1]}};cell.alignment={horizontal:'center',vertical:'middle'}}}
@@ -1184,7 +1222,7 @@ function rep5(){
     rows:S.vendors.map(v=>[v.code,v.name,v.tax,v.addr,v.contact,v.phone,v.email,v.bank,v.rating,v.status==='active'?'Đang hợp tác':'Ngừng',v.note])};
   buildXlsx(`SoTheoDoi_HopDong_${today()}.xlsx`,[sC,sP,sA,sT,sV]);log('Xuất báo cáo','Sổ theo dõi đầy đủ');save()}
 function rep6(){buildXlsx(`NhatKy_ThayDoi_${today()}.xlsx`,[{name:'Nhat ky',title:'NHẬT KÝ THAY ĐỔI DỮ LIỆU',infos:[['Số dòng:',S.log.length]],cols:[{h:'Thời gian',w:20},{h:'Thao tác',w:24,b:1},{h:'Đối tượng',w:44,wrap:1},{h:'Chi tiết thay đổi (cũ → mới)',w:80,wrap:1}],
-  rows:(HLIST||S.log).map(l=>[new Date(l.t).toLocaleString('vi-VN'),l.action,l.text,l.detail||''])}])}
+  rows:(HLIST||S.log).map(l=>[vnDT(l.t),l.action,l.text,l.detail||''])}])}
 function rep7(){
   const ST={draft:'Dự thảo',signed:'Đã ký',liq:'Đã thanh lý'},VS={active:'Đang hợp tác',inactive:'Ngừng hợp tác'};
   const V=S.vendors.slice().sort((a,b)=>String(a.code).localeCompare(String(b.code),'vi',{numeric:true}));
@@ -1215,7 +1253,7 @@ function vHistory(){
   const draw=()=>{['hq','hg','hf','ht'].forEach(k=>f[k]=$('#'+k).value);const q=norm(f.hq);
     const L=S.log.filter(l=>{const d=iso(new Date(l.t));return(!f.hg||actGroup(l.action)===f.hg)&&(!f.hf||d>=f.hf)&&(!f.ht||d<=f.ht)&&(!q||norm(l.action+' '+l.text+' '+(l.detail||'')).includes(q))});
     HLIST=L;$('#hcount').textContent=`${L.length} / ${S.log.length} dòng${L.length>500?' — hiển thị 500 dòng mới nhất, xuất Excel để xem đủ':''}. Lịch sử chỉ được ghi thêm, không sửa hay xóa được từ giao diện.`;
-    $('#htb').innerHTML=L.slice(0,500).map(l=>{const g=HG[actGroup(l.action)];return`<tr><td>${new Date(l.t).toLocaleString('vi-VN')}</td><td><span class="badge ${g[1]}">${g[0]}</span></td><td><b>${esc(l.action)}</b></td><td style="white-space:normal">${esc(l.text)}</td><td style="white-space:normal;min-width:260px">${esc(l.detail||'').replace(/; /g,'<br>')}</td></tr>`}).join('')||'<tr><td colspan="5" class="muted">Không có dòng nào</td></tr>'};
+    $('#htb').innerHTML=L.slice(0,500).map(l=>{const g=HG[actGroup(l.action)];return`<tr><td>${vnDT(l.t)}</td><td><span class="badge ${g[1]}">${g[0]}</span></td><td><b>${esc(l.action)}</b></td><td style="white-space:normal">${esc(l.text)}</td><td style="white-space:normal;min-width:260px">${esc(l.detail||'').replace(/; /g,'<br>')}</td></tr>`}).join('')||'<tr><td colspan="5" class="muted">Không có dòng nào</td></tr>'};
   ['hq','hg','hf','ht'].forEach(id=>$('#'+id).oninput=draw);draw();
 }
 function repContract(cid){const c=contract(cid),v=vendor(c.vendorId),val=cValue(c),pd=cPaid(c.id);
@@ -1239,11 +1277,11 @@ const YEL='FFFFF9C4';
 const CF=[['no','Số hợp đồng *','s','Bắt buộc. Ghi đúng như trên hợp đồng'],['type','Loại hợp đồng','s','Nhân lực / Kỹ thuật / Bảo vệ / Vệ sinh / Mua sắm / Khác'],
   ['vcode','Mã nhà thầu','s','Để trống nếu nhà thầu mới'],['vname','Tên nhà thầu *','s','Bắt buộc'],['vtax','Mã số thuế','s','Dùng để nhận diện nhà thầu đã có'],
   ['vaddr','Địa chỉ nhà thầu','s',''],['vcontact','Người liên hệ','s',''],['vphone','Điện thoại','s',''],['vemail','Email','s',''],['vbank','Tài khoản ngân hàng','s','Số TK - Ngân hàng - Chi nhánh'],
-  ['signDate','Ngày ký','d','dd/mm/yyyy'],['start','Ngày hiệu lực *','d','Bắt buộc, dd/mm/yyyy'],['end','Ngày hết hạn hợp đồng','d','Để trống = tự tính theo chức danh'],
-  ['value','Giá trị hợp đồng','n','Để trống = tự tính'],['currency','Loại tiền','s','VND hoặc USD'],['bondAmt','Bảo lãnh thực hiện (số tiền)','n',''],['bondEnd','Bảo lãnh hết hạn','d','dd/mm/yyyy'],
+  ['signDate','Ngày ký','d','dd-mm-yyyy'],['start','Ngày hiệu lực *','d','Bắt buộc, dd-mm-yyyy'],['end','Ngày hết hạn hợp đồng','d','Để trống = tự tính theo chức danh'],
+  ['value','Giá trị hợp đồng','n','Để trống = tự tính'],['currency','Loại tiền','s','VND hoặc USD'],['bondAmt','Bảo lãnh thực hiện (số tiền)','n',''],['bondEnd','Bảo lãnh hết hạn','d','dd-mm-yyyy'],
   ['owner','Người phụ trách','s',''],['dept','Phòng ban','s',''],['link','Đường dẫn file scan','s','Link http(s):// hoặc đường dẫn ổ đĩa tới file PDF đã ký'],['note','Ghi chú','s',''],
   ['amdNo','Số phụ lục (nếu là phụ lục)','s','Chỉ điền khi phiếu này là PHỤ LỤC của HĐ đã có'],['amdDate','Ngày ký phụ lục','d',''],['amdContent','Nội dung phụ lục','s','Tóm tắt điều chỉnh']];
-const PF=[['no','Số hợp đồng *','s'],['vname','Nhà thầu','s'],['period','Kỳ thanh toán (mm/yyyy) *','s'],['reqNo','Số đề nghị thanh toán','s'],['invNo','Số hóa đơn','s'],['note','Ghi chú','s']];
+const PF=[['no','Số hợp đồng *','s'],['vname','Nhà thầu','s'],['period','Kỳ thanh toán (mm-yyyy) *','s'],['reqNo','Số đề nghị thanh toán','s'],['invNo','Số hóa đơn','s'],['note','Ghi chú','s']];
 const lkey=s=>norm(String(s).replace(/\*/g,'')).replace(/\s+/g,' ').trim();
 const isoU=d=>`${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
 const cv=c=>{let v=c.value;if(v&&typeof v==='object'&&!(v instanceof Date)){if('result' in v)v=v.result;else if(v.richText)v=v.richText.map(t=>t.text).join('');else if('text' in v)v=v.text;else v=null}return v??''};
@@ -1265,7 +1303,7 @@ function tplTop(ws,title,sub,n){ws.mergeCells(1,1,1,n);const t=ws.getCell(1,1);t
   ws.mergeCells(2,1,2,n);const s=ws.getCell(2,1);s.value=sub;s.font={italic:true,size:9,color:{argb:'FF64748B'}};s.alignment={wrapText:true,vertical:'middle'};ws.getRow(2).height=30}
 function tplKV(ws,r0,fields,vals,n){fields.forEach(([k,label,t,hint],i)=>{const r=r0+i,a=ws.getCell(r,1),b=ws.getCell(r,2);
   a.value=label;a.font={bold:true,color:{argb:'FF334155'}};a.fill=xfill(XC.light);a.border=xbox;
-  let v=vals[k]??'';if(t==='d'&&v)v=xd(v);b.value=v===''?null:v;b.fill=xfill(YEL);b.border=xbox;b.numFmt=t==='d'?'dd/mm/yyyy':t==='n'?'#,##0':'@';b.alignment={horizontal:'left'};
+  let v=vals[k]??'';if(t==='d'&&v)v=xd(v);b.value=v===''?null:v;b.fill=xfill(YEL);b.border=xbox;b.numFmt=t==='d'?'dd-mm-yyyy':t==='n'?'#,##0':'@';b.alignment={horizontal:'left'};
   if(n>2){ws.mergeCells(r,3,r,n);const h=ws.getCell(r,3);h.value=hint||'';h.font={italic:true,size:9,color:{argb:'FF64748B'}}}});return r0+fields.length}
 function tplHeadRow(ws,r,heads){const row=ws.getRow(r);row.values=heads;row.height=32;row.eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill=xfill(XC.head);c.border=xbox;c.alignment={horizontal:'center',vertical:'middle',wrapText:true}})}
 async function tplContractBuf(){
@@ -1274,7 +1312,7 @@ async function tplContractBuf(){
   tplTop(ws,'PHIẾU THÔNG TIN HỢP ĐỒNG','Phòng Hợp đồng điền các ô MÀU VÀNG và gửi kèm file PDF hợp đồng đã ký. Không đổi tên sheet, không sửa cột A và dòng tiêu đề bảng chức danh. Ô có dấu * là bắt buộc.',7);
   const e=tplKV(ws,4,CF,{type:TYPES[0],currency:'VND'},7);
   const h=e+1;tplHeadRow(ws,h,['Mã vị trí','Chức danh *','Số lượng *','Đơn giá / người / tháng *','Thời hạn (tháng) *','Ngày bắt đầu','Ghi chú']);
-  for(let r=h+1;r<=h+25;r++)for(let c=1;c<=7;c++){const x=ws.getCell(r,c);x.fill=xfill(YEL);x.border=xbox;x.numFmt=c===4?'#,##0':c===6?'dd/mm/yyyy':c===3||c===5?'0':'@'}
+  for(let r=h+1;r<=h+25;r++)for(let c=1;c<=7;c++){const x=ws.getCell(r,c);x.fill=xfill(YEL);x.border=xbox;x.numFmt=c===4?'#,##0':c===6?'dd-mm-yyyy':c===3||c===5?'0':'@'}
   const nt=ws.getCell(h+27,1);nt.value='Ngày bắt đầu của chức danh: để trống nếu trùng ngày hiệu lực hợp đồng. Ngày hết hạn của từng chức danh = Ngày bắt đầu + Thời hạn − 1 ngày (hệ thống tự tính).';nt.font={italic:true,size:9,color:{argb:'FF64748B'}};
   return wb.xlsx.writeBuffer();
 }
@@ -1386,7 +1424,7 @@ let IMPP=null;
 function previewPay(o,rows,bad,fname){
   const box=$('#impResult'),fatal=[...bad];const c=S.contracts.find(x=>norm(x.no)===norm(o.no||''));const ym=o.period?toYm(o.period):null;
   if(!o.no)fatal.push('Thiếu Số hợp đồng');else if(!c)fatal.push(`Không tìm thấy hợp đồng "${o.no}" trong hệ thống — hãy nhập hợp đồng trước.`);
-  if(!ym)fatal.push('Kỳ thanh toán không hợp lệ (cần dạng mm/yyyy)');
+  if(!ym)fatal.push('Kỳ thanh toán không hợp lệ (cần dạng mm-yyyy)');
   if(fatal.length){box.innerHTML=`<div class="card"><h2>📄 ${esc(fname)}</h2><div class="errbox">• ${fatal.map(esc).join('<br>• ')}</div></div>`;return}
   const sys=genLines(c,ym),G=[],qsum={};
   const R=rows.filter(r=>(+r.qty||0)>0||(+r.days||0)>0||(+r.amtClaim||0)>0).map(r=>{
