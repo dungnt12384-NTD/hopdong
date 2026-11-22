@@ -354,7 +354,7 @@ async function gStart(){GD.err='';GD.state='signin';gate();
   await gAfterAuth()}
 async function gAfterAuth(){
   try{ROOT=await gRoot();
-    try{const a=await(await gfetch('/drive/v3/about?fields='+encodeURIComponent('user(displayName,emailAddress)'))).json();GD.user=a.user.emailAddress||a.user.displayName||'';ME=a.user.displayName||GD.user}catch(e){}
+    try{const a=await(await gfetch('/drive/v3/about?fields='+encodeURIComponent('user(displayName,emailAddress)'))).json();GD.user=a.user.emailAddress||a.user.displayName||'';ME=a.user.displayName||GD.user;const b=document.getElementById('syncBtn');if(b&&GD.user&&b.textContent.startsWith('☁ Google')){b.textContent=b.textContent.replace('☁ ','☁ 👤 '+GD.user+' · ');b.title='Đang đăng nhập Google: '+GD.user}}catch(e){}
     let hdr=null,found=false;
     try{const fh=await ROOT.getFileHandle(DATAFILE);found=true;hdr=JSON.parse(await(await fh.getFile()).text())}catch(e){if(found)throw new Error('Có file dữ liệu trên Drive nhưng không đọc được. Kiểm tra mạng rồi thử lại (không tạo dữ liệu mới để tránh ghi đè).')}
     GD.hdr=hdr;
