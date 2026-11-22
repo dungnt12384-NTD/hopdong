@@ -415,8 +415,8 @@ function gate(){let g=document.getElementById('gate');
   else h=`<h2>🗄 Quản lý Hợp đồng</h2><p>Đăng nhập Google để mở dữ liệu của bạn. Dữ liệu nằm trong Google Drive của bạn và được mã hóa bằng mật khẩu riêng.</p>${err}<button class="pri big" onclick="gStart()">Đăng nhập Google</button>`;
   g.innerHTML=`<div class="gbox">${h}</div>`;const f=g.querySelector('#gpw');if(f)setTimeout(()=>f.focus(),50)}
 function setSync(state,msg){SYNC={state,msg:msg||'',time:state==='ok'?new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'}):SYNC.time};const b=document.getElementById('syncBtn');if(!b)return;
-  const T={off:['⚠ Chưa đăng nhập Google','#b45309'],na:['⚠ Không tải được đăng nhập Google','#b91c1c'],ask:['⚠ Bấm để đăng nhập lại Google','#b45309'],busy:['⟳ Đang lưu…','#1d4ed8'],ok:[`☁ Google Drive/${DIR?DIR.name+'/':''}${DATAFILE} · lưu ${SYNC.time}`,'#15803d'],err:['⚠ Lỗi lưu file — sẽ thử lại','#b91c1c']}[state];
-  b.textContent=T[0];b.style.background=T[1];b.title=msg||'';gate()}
+  const T={off:['⚠ Chưa đăng nhập Google','#b45309'],na:['⚠ Không tải được đăng nhập Google','#b91c1c'],ask:['⚠ Bấm để đăng nhập lại Google','#b45309'],busy:['⟳ Đang lưu…','#1d4ed8'],ok:[`☁ ${GD.user?'👤 '+GD.user+' · ':''}Google Drive/${DIR?DIR.name+'/':''}${DATAFILE} · lưu ${SYNC.time}`,'#15803d'],err:['⚠ Lỗi lưu file — sẽ thử lại','#b91c1c']}[state];
+  b.textContent=T[0];b.style.background=T[1];b.title=(GD.user?'Đang đăng nhập Google: '+GD.user+(msg?'\n':''):'')+(msg||'');gate()}
 function queueSync(){if(!DIR)return;clearTimeout(syncTimer);syncTimer=setTimeout(syncNow,400)}
 async function syncNow(){
   if(!DIR)return;if(syncing){syncPending=true;return}
