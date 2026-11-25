@@ -5,6 +5,8 @@ client_secret*
 .env
 du-lieu-hop-dong*.json
 SaoLuu/
+# Tai lieu hop dong that (scan, CV...) - TUYET DOI khong push len repo cong khai
+tai_lieu/
 *.bak
 Thumbs.db
 desktop.ini
