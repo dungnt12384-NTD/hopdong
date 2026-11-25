@@ -1,19 +1,21 @@
 # Backup 1 ban truoc moi lan sua doi, de rollback khi loi.
 # Dung:  .\backup-truoc-sua.ps1 -Note "mo ta ngan"
-# Ket qua: G:\My Drive\github-backup\<ngay-gio>_<note>.zip (Google Drive, NGOAI repo, khong bi push)
+# Ket qua: G:\My Drive\github-backup\<ten-du-an>\<ngay-gio>_<note>.zip (Google Drive, NGOAI repo, khong bi push)
+#   (<ten-du-an> = ten thu muc repo, vd hopdong; script nay dung chung duoc cho du an khac trong D:\github)
 #   - zip KHONG chua .git va tai_lieu (tai lieu hop dong that, nang)
-#   - thu muc tai_lieu duoc copy them sang G:\My Drive\github-backup\tai_lieu (chi them/cap nhat, khong xoa)
-#   - neu o G: khong san sang thi tam luu o D:\github\hopdong-backup va canh bao
+#   - thu muc tai_lieu duoc copy them sang G:\My Drive\github-backup\<ten-du-an>\tai_lieu (chi them/cap nhat, khong xoa)
+#   - neu o G: khong san sang thi tam luu o D:\github\<ten-du-an>-backup va canh bao
 # Khoi phuc: giai nen file zip de len thu muc repo, hoac dung git checkout / git stash neu da commit.
 param(
     [string]$Note = "backup"
 )
 
 $repo = $PSScriptRoot
-$dest = 'G:\My Drive\github-backup'
+$proj = Split-Path $repo -Leaf   # ten du an = ten thu muc repo (hopdong, chiatien...)
+$dest = Join-Path 'G:\My Drive\github-backup' $proj
 if (-not (Test-Path 'G:\My Drive')) {
-    Write-Host "CANH BAO: khong thay G:\My Drive (Google Drive chua chay?). Tam luu o D:\github\hopdong-backup" -ForegroundColor Yellow
-    $dest = Join-Path (Split-Path $repo -Parent) "hopdong-backup"
+    Write-Host "CANH BAO: khong thay G:\My Drive (Google Drive chua chay?). Tam luu o D:\github\$proj-backup" -ForegroundColor Yellow
+    $dest = Join-Path (Split-Path $repo -Parent) ($proj + "-backup")
 }
 if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
 
